@@ -9,7 +9,7 @@ Mobile-first site survey capture app for Glidepath Solutions. Surveyors open a p
 - Tailwind CSS 4
 - SQLite via `better-sqlite3`
 - Local disk storage with a swappable storage service layer
-- PDF generation with `pdfkit` and `sharp`
+- PDF generation with `pdfkit`
 - CSV generation with `csv-stringify`
 - Email delivery via Resend or SMTP
 
@@ -23,11 +23,12 @@ Mobile-first site survey capture app for Glidepath Solutions. Surveyors open a p
 - Hidden honeypot, upload constraints, sanitised filenames, and IP-based rate limiting
 - Submission reference number and PDF download link on success
 - Submission, line-item, photo, log, and rate-limit tables stored in SQLite
+- Read-only password-protected admin area at `/admin`
 
 ## Local Run
 
 1. Copy `.env.example` to `.env`.
-2. Set at least `DESTINATION_EMAIL`, `EMAIL_FROM`, and either `RESEND_API_KEY` or the SMTP variables.
+2. Set at least `ADMIN_PASSWORD`, `DESTINATION_EMAIL`, `EMAIL_FROM`, and either `RESEND_API_KEY` or the SMTP variables.
 3. Install dependencies:
 
 ```bash
@@ -51,6 +52,7 @@ Important production values for the DigitalOcean deployment:
 ```env
 APP_BASE_URL=https://evcapture.glidepathsolutions.co.uk
 PORT=3000
+ADMIN_PASSWORD=choose-a-strong-shared-password
 DATABASE_FILE=/var/www/evcapture/shared/app.db
 UPLOAD_ROOT=/var/www/evcapture/shared/uploads
 GENERATED_ROOT=/var/www/evcapture/shared/generated
@@ -77,6 +79,23 @@ Edit [`data/projects.json`](./data/projects.json). Each entry needs:
 ```
 
 No admin UI is required in v1; the app reads the JSON file directly.
+
+## Admin Area
+
+The app includes a simple shared-password admin area for internal use:
+
+- URL: `/admin`
+- Access model: one shared password stored in `ADMIN_PASSWORD`
+- Session model: successful login sets an `HttpOnly` cookie scoped to `/admin`
+- Scope: read-only submission list, detail view, protected photo viewing, and protected PDF/CSV downloads
+
+To enable it:
+
+1. Set `ADMIN_PASSWORD` in `.env` or the server environment.
+2. Redeploy or restart the app.
+3. Open `https://evcapture.glidepathsolutions.co.uk/admin`.
+
+This is intentionally lightweight for v1. It is not a multi-user auth system and should only be used behind a strong shared password.
 
 ## Deployment to a DigitalOcean Droplet
 
@@ -244,4 +263,4 @@ For SMTP:
 - Email failure does not block the public success screen. The submission still saves, and the failure is written to the `submission_logs` table plus the submission record.
 - The database bootstraps itself on first run; no separate migration step is required for v1.
 - Uploaded files are stored outside `public/`, so they are not anonymously browsable.
-- The app is intentionally unauthenticated in v1; do not expose any future admin route publicly without adding access control.
+- Public survey submission remains unauthenticated in v1, but `/admin` is password-protected and serves photos/files only after the admin cookie is present.

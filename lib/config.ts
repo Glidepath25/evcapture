@@ -16,6 +16,7 @@ function booleanFromEnv(name: string, fallback: boolean) {
 export function getServerConfig() {
   return {
     appBaseUrl: process.env.APP_BASE_URL ?? "http://localhost:3000",
+    adminPassword: process.env.ADMIN_PASSWORD ?? "",
     databaseFile: process.env.DATABASE_FILE ?? "./storage/app.db",
     uploadRoot: process.env.UPLOAD_ROOT ?? "./storage/uploads",
     generatedRoot: process.env.GENERATED_ROOT ?? "./storage/generated",
