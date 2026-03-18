@@ -19,6 +19,145 @@ type SubmissionContext = {
   userAgent: string;
 };
 
+type BackgroundArtifactsContext = {
+  metadata: SubmissionMetadata;
+  items: ReturnType<typeof validateEditableItems>;
+  storedPhotos: Awaited<ReturnType<typeof saveUploadedPhotos>>;
+  reference: string;
+  createdAt: string;
+};
+
+function updateSubmissionStatus(reference: string, updates: { pdfStatus?: string; emailStatus?: string; emailError?: string | null; pdfPath?: string | null; csvPath?: string | null }) {
+  const db = getDb();
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.pdfStatus !== undefined) {
+    fields.push("pdf_status = ?");
+    values.push(updates.pdfStatus);
+  }
+  if (updates.emailStatus !== undefined) {
+    fields.push("email_status = ?");
+    values.push(updates.emailStatus);
+  }
+  if (updates.emailError !== undefined) {
+    fields.push("email_error = ?");
+    values.push(updates.emailError);
+  }
+  if (updates.pdfPath !== undefined) {
+    fields.push("pdf_path = ?");
+    values.push(updates.pdfPath);
+  }
+  if (updates.csvPath !== undefined) {
+    fields.push("csv_path = ?");
+    values.push(updates.csvPath);
+  }
+
+  if (fields.length === 0) {
+    return;
+  }
+
+  values.push(reference);
+  db.prepare(`UPDATE submissions SET ${fields.join(", ")} WHERE reference = ?`).run(...values);
+}
+
+async function finalizeSubmissionArtifacts(context: BackgroundArtifactsContext) {
+  let csvBuffer: Buffer | null = null;
+  let pdfBuffer: Buffer | null = null;
+
+  try {
+    csvBuffer = buildSubmissionCsv({
+      ...context.metadata,
+      reference: context.reference,
+      createdAt: context.createdAt,
+      items: context.items,
+      photos: context.storedPhotos,
+    });
+
+    const csvFile = await saveGeneratedFile(context.reference, `${context.reference}.csv`, csvBuffer);
+    updateSubmissionStatus(context.reference, { csvPath: csvFile.relativePath });
+    writeLog("info", "Submission CSV generated.", context.reference);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown CSV generation error";
+    writeLog("error", "Submission CSV generation failed.", context.reference, { error: message });
+  }
+
+  try {
+    pdfBuffer = await buildSubmissionPdf({
+      ...context.metadata,
+      reference: context.reference,
+      createdAt: context.createdAt,
+      items: context.items,
+      photos: context.storedPhotos,
+    });
+
+    if (pdfBuffer.length === 0) {
+      throw new Error("Generated PDF buffer was empty.");
+    }
+
+    const pdfFile = await saveGeneratedFile(context.reference, `${context.reference}.pdf`, pdfBuffer);
+    updateSubmissionStatus(context.reference, {
+      pdfStatus: "complete",
+      pdfPath: pdfFile.relativePath,
+    });
+    writeLog("info", "Submission PDF generated.", context.reference);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown PDF generation error";
+    updateSubmissionStatus(context.reference, {
+      pdfStatus: "failed",
+      emailStatus: "failed",
+      emailError: "PDF generation failed before email could be sent.",
+    });
+    writeLog("error", "Submission PDF generation failed.", context.reference, { error: message });
+    return;
+  }
+
+  if (!csvBuffer || !pdfBuffer) {
+    updateSubmissionStatus(context.reference, {
+      emailStatus: "failed",
+      emailError: "Required artifacts were not ready for email sending.",
+    });
+    writeLog("error", "Submission email skipped because artifacts were incomplete.", context.reference);
+    return;
+  }
+
+  try {
+    await sendSubmissionEmail({
+      ...context.metadata,
+      reference: context.reference,
+      pdfBuffer,
+      csvBuffer,
+    });
+
+    updateSubmissionStatus(context.reference, {
+      emailStatus: "sent",
+      emailError: null,
+    });
+    writeLog("info", "Submission email sent.", context.reference);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown email error";
+    updateSubmissionStatus(context.reference, {
+      emailStatus: "failed",
+      emailError: message,
+    });
+    writeLog("error", "Submission email failed.", context.reference, { error: message });
+  }
+}
+
+function queueSubmissionArtifacts(context: BackgroundArtifactsContext) {
+  setTimeout(() => {
+    void finalizeSubmissionArtifacts(context).catch((error) => {
+      const message = error instanceof Error ? error.message : "Unknown background processing error";
+      updateSubmissionStatus(context.reference, {
+        pdfStatus: "failed",
+        emailStatus: "failed",
+        emailError: message,
+      });
+      writeLog("error", "Background submission processing crashed.", context.reference, { error: message });
+    });
+  }, 0);
+}
+
 export async function processSubmission(context: SubmissionContext) {
   if (context.honeypotValue.trim()) {
     writeLog("warn", "Submission blocked by honeypot.", undefined, { ipAddress: context.ipAddress });
@@ -41,23 +180,6 @@ export async function processSubmission(context: SubmissionContext) {
   const reference = makeReference();
   const createdAt = new Date().toISOString();
   const storedPhotos = await saveUploadedPhotos(reference, context.photos, validatedPhotoLinks);
-  const csvBuffer = buildSubmissionCsv({
-    ...metadata,
-    reference,
-    createdAt,
-    items: normalisedItems,
-    photos: storedPhotos,
-  });
-  const pdfBuffer = await buildSubmissionPdf({
-    ...metadata,
-    reference,
-    createdAt,
-    items: normalisedItems,
-    photos: storedPhotos,
-  });
-
-  const csvFile = await saveGeneratedFile(reference, `${reference}.csv`, csvBuffer);
-  const pdfFile = await saveGeneratedFile(reference, `${reference}.pdf`, pdfBuffer);
 
   const db = getDb();
   const saveSubmission = db.transaction(() => {
@@ -72,6 +194,7 @@ export async function processSubmission(context: SubmissionContext) {
             site_location,
             general_comments,
             created_at,
+            pdf_status,
             email_status,
             pdf_path,
             csv_path,
@@ -88,8 +211,9 @@ export async function processSubmission(context: SubmissionContext) {
             @generalComments,
             @createdAt,
             'pending',
-            @pdfPath,
-            @csvPath,
+            'pending',
+            NULL,
+            NULL,
             @photoCount,
             @clientIp,
             @userAgent,
@@ -105,8 +229,6 @@ export async function processSubmission(context: SubmissionContext) {
         siteLocation: metadata.siteLocation,
         generalComments: metadata.generalComments,
         createdAt,
-        pdfPath: pdfFile.relativePath,
-        csvPath: csvFile.relativePath,
         photoCount: storedPhotos.length,
         clientIp: context.ipAddress,
         userAgent: context.userAgent,
@@ -181,27 +303,17 @@ export async function processSubmission(context: SubmissionContext) {
     photoCount: storedPhotos.length,
   });
 
-  let emailDelivered = false;
-  try {
-    await sendSubmissionEmail({
-      ...metadata,
-      reference,
-      pdfBuffer,
-      csvBuffer,
-    });
-
-    db.prepare("UPDATE submissions SET email_status = 'sent', email_error = NULL WHERE reference = ?").run(reference);
-    emailDelivered = true;
-    writeLog("info", "Submission email sent.", reference);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown email error";
-    db.prepare("UPDATE submissions SET email_status = 'failed', email_error = ? WHERE reference = ?").run(message, reference);
-    writeLog("error", "Submission email failed.", reference, { error: message });
-  }
+  queueSubmissionArtifacts({
+    metadata,
+    items: normalisedItems,
+    storedPhotos,
+    reference,
+    createdAt,
+  });
 
   return {
     reference,
-    emailDelivered,
+    emailDelivered: false,
     pdfDownloadPath: `/download/${reference}`,
   };
 }

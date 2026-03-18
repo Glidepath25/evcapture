@@ -25,6 +25,7 @@ function initialise(db: Database.Database) {
       site_location TEXT NOT NULL DEFAULT '',
       general_comments TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
+      pdf_status TEXT NOT NULL DEFAULT 'pending',
       email_status TEXT NOT NULL DEFAULT 'pending',
       email_error TEXT,
       pdf_path TEXT,
@@ -84,6 +85,7 @@ function initialise(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_submission_logs_reference ON submission_logs(submission_reference);
   `);
 
+  ensureColumn(db, "submissions", "pdf_status", "TEXT NOT NULL DEFAULT 'pending'");
   ensureColumn(db, "submission_photos", "linked_template_id", "TEXT");
   ensureColumn(db, "submission_photos", "linked_section_name", "TEXT NOT NULL DEFAULT 'General'");
   ensureColumn(db, "submission_photos", "linked_description", "TEXT NOT NULL DEFAULT 'Site-wide photo'");

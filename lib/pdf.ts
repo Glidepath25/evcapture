@@ -1,6 +1,4 @@
-import fs from "node:fs";
 import PDFDocument from "pdfkit";
-import sharp from "sharp";
 import { formatSubmissionTimestamp, formatSurveyDate } from "@/lib/format";
 import type { NormalizedLineItem, StoredPhoto, SubmissionMetadata } from "@/types";
 
@@ -52,91 +50,27 @@ function rowHeight(doc: PDFKit.PDFDocument, description: string, quantity: strin
   return height + 16;
 }
 
-async function addPhotos(doc: PDFKit.PDFDocument, photos: StoredPhoto[]) {
-  if (photos.length === 0) {
-    return;
+function buildPhotoSummary(photos: StoredPhoto[]) {
+  const groupedByLabel = new Map<string, string[]>();
+
+  for (const photo of photos) {
+    const label = photo.linkedTemplateId
+      ? `${photo.linkedSectionName}: ${photo.linkedDescription}`
+      : "General site photos";
+
+    const current = groupedByLabel.get(label) ?? [];
+    current.push(photo.storedName);
+    groupedByLabel.set(label, current);
   }
 
-  const photoGroups = [
-    {
-      label: "General site photos",
-      photos: photos.filter((photo) => !photo.linkedTemplateId),
-    },
-    ...Array.from(new Set(photos.filter((photo) => photo.linkedTemplateId).map((photo) => photo.linkedTemplateId))).map((templateId) => {
-      const groupedPhotos = photos.filter((photo) => photo.linkedTemplateId === templateId);
-      return {
-        label: `${groupedPhotos[0]?.linkedSectionName ?? "Section"}: ${groupedPhotos[0]?.linkedDescription ?? "Linked photos"}`,
-        photos: groupedPhotos,
-      };
-    }),
-  ].filter((group) => group.photos.length > 0);
-
-  doc.addPage({ margin: PAGE_MARGIN });
-  doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(18).text("Uploaded Photos");
-  doc.moveDown(0.6);
-
-  const boxWidth = 240;
-  const boxHeight = 170;
-  let x = PAGE_MARGIN;
-  let y = doc.y;
-
-  for (const group of photoGroups) {
-    if (y + 30 > doc.page.height - PAGE_MARGIN) {
-      doc.addPage({ margin: PAGE_MARGIN });
-      y = PAGE_MARGIN;
-      x = PAGE_MARGIN;
-    }
-
-    doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(12).text(group.label, PAGE_MARGIN, y);
-    y = doc.y + 8;
-    x = PAGE_MARGIN;
-
-    for (const photo of group.photos) {
-      if (y + boxHeight + 36 > doc.page.height - PAGE_MARGIN) {
-        doc.addPage({ margin: PAGE_MARGIN });
-        x = PAGE_MARGIN;
-        y = PAGE_MARGIN;
-      }
-
-      try {
-        const transformed = await sharp(fs.readFileSync(photo.absolutePath))
-          .rotate()
-          .resize({ width: 700, height: 500, fit: "inside", withoutEnlargement: true })
-          .jpeg({ quality: 82 })
-          .toBuffer();
-
-        doc.roundedRect(x, y, boxWidth, boxHeight, 10).fillAndStroke("#f7f9fc", "#d5deea");
-        doc.image(transformed, x + 10, y + 10, { fit: [boxWidth - 20, boxHeight - 38], align: "center", valign: "center" });
-        doc.fillColor("#1f2f3d").font("Helvetica").fontSize(9).text(photo.originalName, x + 10, y + boxHeight - 20, {
-          width: boxWidth - 20,
-        });
-      } catch {
-        doc.roundedRect(x, y, boxWidth, boxHeight, 10).fillAndStroke("#f7f9fc", "#d5deea");
-        doc.fillColor("#9b1c1c").font("Helvetica").fontSize(10).text(`Preview unavailable: ${photo.originalName}`, x + 12, y + 12, {
-          width: boxWidth - 24,
-        });
-      }
-
-      if (x + boxWidth * 2 + 16 <= doc.page.width - PAGE_MARGIN) {
-        x += boxWidth + 16;
-      } else {
-        x = PAGE_MARGIN;
-        y += boxHeight + 20;
-      }
-    }
-
-    y += boxHeight + 18;
-  }
+  return Array.from(groupedByLabel.entries()).map(([label, filenames]) => ({
+    label,
+    count: filenames.length,
+    filenames,
+  }));
 }
 
-export async function buildSubmissionPdf(input: PdfInput) {
-  const doc = new PDFDocument({
-    margin: PAGE_MARGIN,
-    size: "A4",
-    bufferPages: true,
-  });
-
-  const bufferPromise = pipeToBuffer(doc);
+function renderSubmissionPdf(doc: PDFKit.PDFDocument, input: PdfInput) {
   addHeader(doc, input);
 
   addFieldBlock(doc, "Submitted", formatSubmissionTimestamp(input.createdAt), PAGE_MARGIN, 96, 165);
@@ -156,16 +90,6 @@ export async function buildSubmissionPdf(input: PdfInput) {
 
   let currentSection = "";
   doc.font("Helvetica").fontSize(9).fillColor("#1f2f3d");
-  const linkedPhotoMap = new Map<string, StoredPhoto[]>();
-  for (const photo of input.photos) {
-    if (!photo.linkedTemplateId) {
-      continue;
-    }
-
-    const current = linkedPhotoMap.get(photo.linkedTemplateId) ?? [];
-    current.push(photo);
-    linkedPhotoMap.set(photo.linkedTemplateId, current);
-  }
 
   for (const item of input.items) {
     if (item.section !== currentSection) {
@@ -190,11 +114,7 @@ export async function buildSubmissionPdf(input: PdfInput) {
     }
 
     const descriptionText = descriptionParts.join("\n\n");
-    const linkedPhotos = linkedPhotoMap.get(item.templateId) ?? [];
-    const notesText = [item.notes || "-", linkedPhotos.length > 0 ? `Photos: ${linkedPhotos.map((photo) => photo.storedName).join(", ")}` : ""]
-      .filter(Boolean)
-      .join("\n\n");
-    const height = rowHeight(doc, descriptionText, item.quantity?.toString() ?? "-", notesText);
+    const height = rowHeight(doc, descriptionText, item.quantity?.toString() ?? "-", item.notes || "-");
 
     if (currentY + height > doc.page.height - PAGE_MARGIN) {
       doc.addPage({ margin: PAGE_MARGIN });
@@ -207,12 +127,74 @@ export async function buildSubmissionPdf(input: PdfInput) {
     doc.text(item.chargeType, PAGE_MARGIN + 8, currentY + 8, { width: 95 });
     doc.text(descriptionText, PAGE_MARGIN + 110, currentY + 8, { width: 230 });
     doc.text(item.quantity === null ? "-" : item.quantity.toString(), PAGE_MARGIN + 345, currentY + 8, { width: 40, align: "right" });
-    doc.text(notesText, PAGE_MARGIN + 390, currentY + 8, { width: 165 });
+    doc.text(item.notes || "-", PAGE_MARGIN + 390, currentY + 8, { width: 165 });
     currentY += height;
   }
 
-  await addPhotos(doc, input.photos);
-  doc.end();
+  doc.addPage({ margin: PAGE_MARGIN });
+  doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(18).text("Photo Summary");
+  doc.moveDown(0.8);
 
+  const photoSummary = buildPhotoSummary(input.photos);
+  if (photoSummary.length === 0) {
+    doc.fillColor("#1f2f3d").font("Helvetica").fontSize(11).text("No photos were uploaded with this submission.");
+    return;
+  }
+
+  for (const group of photoSummary) {
+    if (doc.y + 80 > doc.page.height - PAGE_MARGIN) {
+      doc.addPage({ margin: PAGE_MARGIN });
+    }
+
+    doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(12).text(`${group.label} (${group.count})`);
+    doc.moveDown(0.2);
+    doc.fillColor("#1f2f3d").font("Helvetica").fontSize(10).text(group.filenames.join("\n"), {
+      width: doc.page.width - PAGE_MARGIN * 2,
+    });
+    doc.moveDown(0.8);
+  }
+}
+
+function buildEmergencyPdfBuffer(message: string) {
+  const doc = new PDFDocument({
+    margin: PAGE_MARGIN,
+    size: "A4",
+  });
+
+  const bufferPromise = pipeToBuffer(doc);
+  doc.font("Helvetica-Bold").fontSize(18).fillColor("#10315a").text("Glidepath Solutions");
+  doc.moveDown(1);
+  doc.font("Helvetica-Bold").fontSize(14).fillColor("#10315a").text("PDF generation fallback");
+  doc.moveDown(0.5);
+  doc.font("Helvetica").fontSize(11).fillColor("#1f2f3d").text(message);
+  doc.end();
   return bufferPromise;
+}
+
+export async function buildSubmissionPdf(input: PdfInput) {
+  try {
+    const doc = new PDFDocument({
+      margin: PAGE_MARGIN,
+      size: "A4",
+      bufferPages: true,
+    });
+
+    const bufferPromise = pipeToBuffer(doc);
+
+    try {
+      renderSubmissionPdf(doc, input);
+    } finally {
+      doc.end();
+    }
+
+    return await bufferPromise;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown PDF generation failure";
+
+    try {
+      return await buildEmergencyPdfBuffer(`The full PDF could not be generated. Error: ${message}`);
+    } catch {
+      return Buffer.from("");
+    }
+  }
 }
