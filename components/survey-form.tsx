@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { todayIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { EditableLineItem, Project, SurveyTemplateRow } from "@/types";
@@ -115,8 +115,9 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
   const [dragActive, setDragActive] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const photoEntriesRef = useRef<PhotoEntry[]>([]);
+  const topRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -215,6 +216,10 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     return Object.keys(nextErrors).length === 0;
   }
 
+  function scrollToTop() {
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function submitForm() {
     const formData = new FormData();
     formData.set("project", project);
@@ -242,7 +247,14 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
       body: formData,
     });
 
-    const payload = (await response.json()) as { error?: string; reference?: string; emailDelivered?: boolean };
+    let payload: { error?: string; reference?: string; emailDelivered?: boolean } = {};
+    try {
+      payload = (await response.json()) as { error?: string; reference?: string; emailDelivered?: boolean };
+    } catch {
+      payload = {
+        error: "The server returned an invalid response. Check the server logs.",
+      };
+    }
 
     if (!response.ok || !payload.reference) {
       throw new Error(payload.error || "Submission failed.");
@@ -256,14 +268,19 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     setSubmitError("");
 
     if (!validateClientSide()) {
+      scrollToTop();
       return;
     }
 
-    startTransition(() => {
-      void submitForm().catch((error: unknown) => {
+    setIsSubmitting(true);
+    void submitForm()
+      .catch((error: unknown) => {
         setSubmitError(error instanceof Error ? error.message : "Submission failed.");
+        scrollToTop();
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
-    });
   }
 
   const sectionGroups = templateRows.reduce<Array<{ section: string; rows: SurveyTemplateRow[] }>>((groups, row) => {
@@ -281,6 +298,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
 
   return (
     <form className="relative" onSubmit={handleSubmit}>
+      <div ref={topRef} />
       <div className="space-y-8 pb-32 sm:pb-28">
         <section className="rounded-[24px] border border-[var(--brand-border)] bg-[var(--brand-surface-alt)] p-5 lg:hidden">
           <div className="inline-flex items-center gap-3 rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">
@@ -637,16 +655,24 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
 
       <div className="sticky-bar-shadow fixed inset-x-0 bottom-0 z-20 border-t border-[var(--brand-border)] bg-white/95 px-4 py-3 backdrop-blur [padding-bottom:calc(env(safe-area-inset-bottom)+0.75rem)] md:absolute md:inset-x-auto md:bottom-0 md:left-0 md:right-0 md:rounded-b-[28px] md:[padding-bottom:0.75rem]">
         <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-[var(--brand-muted)]">
+          <div className="text-sm text-[var(--brand-muted)]" aria-live="polite">
             <p className="font-medium text-[var(--brand-ink)]">{photoEntries.length} photos ready</p>
-            <p>Submitting saves the survey, generates the PDF and CSV, and emails the office automatically.</p>
+            {submitError ? (
+              <p className="text-red-700">{submitError}</p>
+            ) : errors.form ? (
+              <p className="text-red-700">{errors.form}</p>
+            ) : isSubmitting ? (
+              <p className="text-[var(--brand-navy)]">Submitting survey and generating files...</p>
+            ) : (
+              <p>Submitting saves the survey, generates the PDF and CSV, and emails the office automatically.</p>
+            )}
           </div>
           <button
             className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[var(--brand-navy)] px-6 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-navy-dark)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-48"
             type="submit"
-            disabled={isPending}
+            disabled={isSubmitting}
           >
-            {isPending ? "Submitting..." : "Submit survey"}
+            {isSubmitting ? "Submitting..." : "Submit survey"}
           </button>
         </div>
       </div>
