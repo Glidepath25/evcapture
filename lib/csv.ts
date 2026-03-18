@@ -10,7 +10,11 @@ type CsvInput = SubmissionMetadata & {
 };
 
 export function buildSubmissionCsv(input: CsvInput) {
-  const photoReferences = input.photos.map((photo) => photo.storedName).join(", ");
+  const generalPhotoReferences = input.photos
+    .filter((photo) => !photo.linkedTemplateId)
+    .map((photo) => photo.storedName)
+    .join(", ");
+
   const records = input.items.map((item) => ({
     reference: input.reference,
     submission_timestamp: formatSubmissionTimestamp(input.createdAt),
@@ -24,7 +28,11 @@ export function buildSubmissionCsv(input: CsvInput) {
     additional_description: item.additionalDescription ?? "",
     quantity: item.quantity ?? "",
     notes: item.notes,
-    photo_references: photoReferences,
+    linked_photo_references: input.photos
+      .filter((photo) => photo.linkedTemplateId === item.templateId)
+      .map((photo) => photo.storedName)
+      .join(", "),
+    general_photo_references: generalPhotoReferences,
   }));
 
   return Buffer.from(

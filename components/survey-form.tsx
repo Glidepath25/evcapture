@@ -19,6 +19,16 @@ type PhotoEntry = {
   file: File;
   key: string;
   previewUrl: string;
+  linkedTemplateId: string | null;
+};
+
+type PhotoPanelProps = {
+  entries: PhotoEntry[];
+  inputId: string;
+  label: string;
+  linkedTemplateId: string | null;
+  onAddFiles: (files: File[], linkedTemplateId: string | null) => void;
+  onRemove: (key: string) => void;
 };
 
 function buildDefaultItems(rows: SurveyTemplateRow[]): EditableLineItem[] {
@@ -27,6 +37,69 @@ function buildDefaultItems(rows: SurveyTemplateRow[]): EditableLineItem[] {
     quantity: "",
     notes: "",
   }));
+}
+
+function buildPhotoKey(file: File, linkedTemplateId: string | null) {
+  return `${linkedTemplateId ?? "general"}-${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function LinkedPhotoPanel({ entries, inputId, label, linkedTemplateId, onAddFiles, onRemove }: PhotoPanelProps) {
+  return (
+    <div className="rounded-[22px] border border-[var(--brand-border)] bg-[var(--brand-surface-alt)] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--brand-navy)]">{label}</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--brand-muted)]">
+            Capture from camera or choose from gallery. These photos will be linked to this survey item.
+          </p>
+        </div>
+        <label
+          className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-2xl bg-[var(--brand-navy)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--brand-navy-dark)]"
+          htmlFor={inputId}
+        >
+          Add photos
+        </label>
+        <input
+          id={inputId}
+          className="hidden"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            onAddFiles(files, linkedTemplateId);
+            event.currentTarget.value = "";
+          }}
+        />
+      </div>
+
+      {entries.length > 0 ? (
+        <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {entries.map((entry) => (
+            <div key={entry.key} className="overflow-hidden rounded-[18px] border border-[var(--brand-border)] bg-white">
+              <div className="aspect-square bg-slate-100">
+                <Image
+                  unoptimized
+                  alt={entry.file.name}
+                  className="h-full w-full object-cover"
+                  height={200}
+                  src={entry.previewUrl}
+                  width={200}
+                />
+              </div>
+              <div className="space-y-2 p-2">
+                <p className="line-clamp-2 text-[11px] leading-4 text-[var(--brand-ink)]">{entry.file.name}</p>
+                <button className="text-[11px] font-semibold text-red-700" type="button" onClick={() => onRemove(entry.key)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb }: SurveyFormProps) {
@@ -70,20 +143,32 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     );
   }
 
-  function mergePhotos(nextFiles: File[]) {
+  function removePhoto(key: string) {
+    setPhotoEntries((current) => {
+      const match = current.find((entry) => entry.key === key);
+      if (match) {
+        URL.revokeObjectURL(match.previewUrl);
+      }
+
+      return current.filter((entry) => entry.key !== key);
+    });
+  }
+
+  function mergePhotos(nextFiles: File[], linkedTemplateId: string | null) {
     const deduped = new Map<string, PhotoEntry>();
 
     for (const entry of photoEntries) {
       deduped.set(entry.key, entry);
     }
 
-    for (const file of nextFiles) {
-      const key = `${file.name}-${file.size}-${file.lastModified}`;
+    for (const file of nextFiles.filter((candidate) => candidate.type.startsWith("image/"))) {
+      const key = buildPhotoKey(file, linkedTemplateId);
       if (!deduped.has(key)) {
         deduped.set(key, {
           file,
           key,
           previewUrl: URL.createObjectURL(file),
+          linkedTemplateId,
         });
       }
     }
@@ -99,6 +184,14 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     }
 
     setPhotoEntries(limited);
+  }
+
+  function getItemPhotoCount(templateId: string) {
+    return photoEntries.filter((entry) => entry.linkedTemplateId === templateId).length;
+  }
+
+  function getItemPhotos(templateId: string) {
+    return photoEntries.filter((entry) => entry.linkedTemplateId === templateId);
   }
 
   function validateClientSide() {
@@ -131,6 +224,14 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     formData.set("generalComments", generalComments);
     formData.set("companyWebsite", honeypot);
     formData.set("items", JSON.stringify(items));
+    formData.set(
+      "photoLinks",
+      JSON.stringify(
+        photoEntries.map((entry) => ({
+          linkedTemplateId: entry.linkedTemplateId,
+        })),
+      ),
+    );
 
     for (const entry of photoEntries) {
       formData.append("photos", entry.file);
@@ -176,86 +277,112 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     return groups;
   }, []);
 
+  const generalPhotos = photoEntries.filter((entry) => entry.linkedTemplateId === null);
+
   return (
     <form className="relative" onSubmit={handleSubmit}>
-      <div className="space-y-6 pb-28 sm:pb-24">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-[var(--brand-navy)]">Survey form</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
-            Complete the project details, update the schedule-of-rates line items, and upload any supporting photos from site.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Project *</span>
-            <div className="field-shell rounded-2xl">
-              <select
-                className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-                value={project}
-                onChange={(event) => setProject(event.target.value)}
-              >
-                <option value="">Select a project</option>
-                {projects.map((projectOption) => (
-                  <option key={projectOption.id} value={projectOption.name}>
-                    {projectOption.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {errors.project ? <p className="mt-2 text-sm text-red-700">{errors.project}</p> : null}
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Surveyor name *</span>
-            <div className="field-shell rounded-2xl">
-              <input
-                className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-                value={surveyorName}
-                onChange={(event) => setSurveyorName(event.target.value)}
-                placeholder="Enter full name"
-              />
-            </div>
-            {errors.surveyorName ? <p className="mt-2 text-sm text-red-700">{errors.surveyorName}</p> : null}
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Survey date *</span>
-            <div className="field-shell rounded-2xl">
-              <input
-                className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-                type="date"
-                value={surveyDate}
-                onChange={(event) => setSurveyDate(event.target.value)}
-              />
-            </div>
-            {errors.surveyDate ? <p className="mt-2 text-sm text-red-700">{errors.surveyDate}</p> : null}
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Site location</span>
-            <div className="field-shell rounded-2xl">
-              <input
-                className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-                value={siteLocation}
-                onChange={(event) => setSiteLocation(event.target.value)}
-                placeholder="Street, site, or grid reference"
-              />
-            </div>
-          </label>
-        </div>
-
-        <label className="block">
-          <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">General comments</span>
-          <div className="field-shell rounded-2xl">
-            <textarea
-              className="min-h-28 w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-              value={generalComments}
-              onChange={(event) => setGeneralComments(event.target.value)}
-              placeholder="Optional site-wide comments"
-            />
+      <div className="space-y-8 pb-32 sm:pb-28">
+        <section className="rounded-[24px] border border-[var(--brand-border)] bg-[var(--brand-surface-alt)] p-5 lg:hidden">
+          <div className="inline-flex items-center gap-3 rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+            Glidepath Solutions
           </div>
-        </label>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-[var(--brand-navy)]">EVcapture survey</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
+            Built for on-site use. Add quantities, notes, and item-linked photos directly from your phone.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <div className="rounded-2xl border border-[var(--brand-border)] bg-white px-3 py-3 text-[var(--brand-ink)]">
+              <span className="block font-semibold text-[var(--brand-navy)]">{templateRows.length} survey items</span>
+              <span className="mt-1 block text-[var(--brand-muted)]">Capture per-item photos</span>
+            </div>
+            <div className="rounded-2xl border border-[var(--brand-border)] bg-white px-3 py-3 text-[var(--brand-ink)]">
+              <span className="block font-semibold text-[var(--brand-navy)]">{photoEntries.length} photos added</span>
+              <span className="mt-1 block text-[var(--brand-muted)]">All linked into the PDF and CSV</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-5">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">1. Site details</p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--brand-navy)]">Start the survey</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
+              Complete the project details first. Everything below is designed for quick thumb use on site.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
+              <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Project *</span>
+              <div className="field-shell rounded-2xl">
+                <select
+                  className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                  value={project}
+                  onChange={(event) => setProject(event.target.value)}
+                >
+                  <option value="">Select a project</option>
+                  {projects.map((projectOption) => (
+                    <option key={projectOption.id} value={projectOption.name}>
+                      {projectOption.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {errors.project ? <p className="mt-2 text-sm text-red-700">{errors.project}</p> : null}
+            </label>
+
+            <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
+              <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Surveyor name *</span>
+              <div className="field-shell rounded-2xl">
+                <input
+                  className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                  value={surveyorName}
+                  onChange={(event) => setSurveyorName(event.target.value)}
+                  placeholder="Enter full name"
+                />
+              </div>
+              {errors.surveyorName ? <p className="mt-2 text-sm text-red-700">{errors.surveyorName}</p> : null}
+            </label>
+
+            <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
+              <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Survey date *</span>
+              <div className="field-shell rounded-2xl">
+                <input
+                  className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                  type="date"
+                  value={surveyDate}
+                  onChange={(event) => setSurveyDate(event.target.value)}
+                />
+              </div>
+              {errors.surveyDate ? <p className="mt-2 text-sm text-red-700">{errors.surveyDate}</p> : null}
+            </label>
+
+            <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
+              <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Site location</span>
+              <div className="field-shell rounded-2xl">
+                <input
+                  className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                  value={siteLocation}
+                  onChange={(event) => setSiteLocation(event.target.value)}
+                  placeholder="Street, site, or grid reference"
+                />
+              </div>
+            </label>
+          </div>
+
+          <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
+            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">General comments</span>
+            <div className="field-shell rounded-2xl">
+              <textarea
+                className="min-h-28 w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                value={generalComments}
+                onChange={(event) => setGeneralComments(event.target.value)}
+                placeholder="Optional site-wide comments"
+              />
+            </div>
+          </label>
+        </section>
 
         <div className="hidden">
           <label htmlFor="company-website">Company website</label>
@@ -268,19 +395,20 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
           />
         </div>
 
-        <section className="space-y-4">
+        <section className="space-y-5">
           <div>
-            <h3 className="text-lg font-semibold text-[var(--brand-navy)]">Survey table</h3>
-            <p className="mt-1 text-sm text-[var(--brand-muted)]">
-              Charge type and description are fixed. Enter only the quantity and notes that apply on site.
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">2. Survey items</p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--brand-navy)]">Complete each line item</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
+              Add a quantity, note, photos, or any combination. Smaller screens stay in card mode for easier tapping.
             </p>
           </div>
 
-          <div className="hidden overflow-hidden rounded-[24px] border border-[var(--brand-border)] md:block">
-            <div className="data-grid-header grid grid-cols-[1fr_2.2fr_0.6fr_1.2fr] gap-4 px-5 py-4 text-sm font-semibold">
+          <div className="hidden overflow-hidden rounded-[24px] border border-[var(--brand-border)] xl:block">
+            <div className="data-grid-header grid grid-cols-[0.9fr_2.25fr_0.55fr_1.2fr] gap-4 px-5 py-4 text-sm font-semibold">
               <div>Charge Type</div>
-              <div>Description of Product/Service</div>
-              <div className="text-right">Quantity</div>
+              <div>Description</div>
+              <div className="text-right">Qty</div>
               <div>Notes</div>
             </div>
             {sectionGroups.map((group) => (
@@ -290,43 +418,54 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                 </div>
                 {group.rows.map((row) => {
                   const item = items.find((entry) => entry.templateId === row.id);
+                  const linkedPhotos = getItemPhotos(row.id);
+
                   return (
-                    <div
-                      key={row.id}
-                      className="grid grid-cols-[1fr_2.2fr_0.6fr_1.2fr] gap-4 border-t border-[var(--brand-border)] px-5 py-4"
-                    >
-                      <div className="text-sm font-medium text-[var(--brand-ink)]">{row.chargeType}</div>
-                      <div className="space-y-2 text-sm text-[var(--brand-ink)]">
-                        <p className="font-medium">{row.description}</p>
-                        {row.additionalDescription ? <p className="text-[13px] leading-5 text-[var(--brand-muted)]">{row.additionalDescription}</p> : null}
-                        {row.notesGuidance ? (
-                          <p className="rounded-xl bg-[var(--brand-surface-alt)] px-3 py-2 text-[12px] leading-5 text-[var(--brand-navy)]">
-                            Notes guidance: {row.notesGuidance}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div>
-                        <div className="field-shell rounded-2xl">
-                          <input
-                            className="w-full rounded-2xl bg-transparent px-3 py-3 text-right text-base outline-none"
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            value={item?.quantity ?? ""}
-                            onChange={(event) => updateItem(row.id, "quantity", event.target.value)}
-                          />
+                    <div key={row.id} className="border-t border-[var(--brand-border)] bg-white">
+                      <div className="grid grid-cols-[0.9fr_2.25fr_0.55fr_1.2fr] gap-4 px-5 py-4">
+                        <div className="text-sm font-medium text-[var(--brand-ink)]">{row.chargeType}</div>
+                        <div className="space-y-2 text-sm text-[var(--brand-ink)]">
+                          <p className="font-medium">{row.description}</p>
+                          {row.additionalDescription ? <p className="text-[13px] leading-5 text-[var(--brand-muted)]">{row.additionalDescription}</p> : null}
+                          {row.notesGuidance ? (
+                            <p className="rounded-xl bg-[var(--brand-surface-alt)] px-3 py-2 text-[12px] leading-5 text-[var(--brand-navy)]">
+                              Notes guidance: {row.notesGuidance}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div>
+                          <div className="field-shell rounded-2xl">
+                            <input
+                              className="w-full rounded-2xl bg-transparent px-3 py-3 text-right text-base outline-none"
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="0.01"
+                              value={item?.quantity ?? ""}
+                              onChange={(event) => updateItem(row.id, "quantity", event.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="field-shell rounded-2xl">
+                            <textarea
+                              className="min-h-24 w-full rounded-2xl bg-transparent px-3 py-3 text-base outline-none"
+                              value={item?.notes ?? ""}
+                              onChange={(event) => updateItem(row.id, "notes", event.target.value)}
+                              placeholder="Add item-specific notes"
+                            />
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <div className="field-shell rounded-2xl">
-                          <textarea
-                            className="min-h-24 w-full rounded-2xl bg-transparent px-3 py-3 text-base outline-none"
-                            value={item?.notes ?? ""}
-                            onChange={(event) => updateItem(row.id, "notes", event.target.value)}
-                            placeholder="Add item-specific notes"
-                          />
-                        </div>
+                      <div className="border-t border-[var(--brand-border)] px-5 py-4">
+                        <LinkedPhotoPanel
+                          entries={linkedPhotos}
+                          inputId={`desktop-photo-${row.id}`}
+                          label={`Linked photos (${linkedPhotos.length})`}
+                          linkedTemplateId={row.id}
+                          onAddFiles={mergePhotos}
+                          onRemove={removePhoto}
+                        />
                       </div>
                     </div>
                   );
@@ -334,23 +473,36 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
               </div>
             ))}
           </div>
-          
-          <div className="space-y-4 md:hidden">
+
+          <div className="space-y-4 xl:hidden">
             {sectionGroups.map((group) => (
               <div key={group.section} className="space-y-3">
-                <h4 className="px-1 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">{group.section}</h4>
+                <div className="sticky top-2 z-10 rounded-2xl bg-[var(--brand-navy)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-white shadow-sm">
+                  {group.section}
+                </div>
                 {group.rows.map((row) => {
                   const item = items.find((entry) => entry.templateId === row.id);
+                  const linkedPhotos = getItemPhotos(row.id);
+
                   return (
                     <article key={row.id} className="rounded-[24px] border border-[var(--brand-border)] bg-white p-4 shadow-sm">
-                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand-muted)]">{row.chargeType}</div>
-                      <h5 className="mt-2 text-base font-semibold text-[var(--brand-ink)]">{row.description}</h5>
-                      {row.additionalDescription ? <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{row.additionalDescription}</p> : null}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand-muted)]">{row.chargeType}</div>
+                          <h4 className="mt-2 text-lg font-semibold leading-7 text-[var(--brand-ink)]">{row.description}</h4>
+                        </div>
+                        <div className="rounded-full bg-[var(--brand-surface-alt)] px-3 py-1 text-xs font-semibold text-[var(--brand-navy)]">
+                          {getItemPhotoCount(row.id)} photos
+                        </div>
+                      </div>
+
+                      {row.additionalDescription ? <p className="mt-3 text-sm leading-6 text-[var(--brand-muted)]">{row.additionalDescription}</p> : null}
                       {row.notesGuidance ? (
                         <p className="mt-3 rounded-2xl bg-[var(--brand-surface-alt)] px-3 py-3 text-sm leading-6 text-[var(--brand-navy)]">
                           Notes guidance: {row.notesGuidance}
                         </p>
                       ) : null}
+
                       <div className="mt-4 grid gap-3">
                         <label className="block">
                           <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Quantity</span>
@@ -370,13 +522,24 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                           <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Notes</span>
                           <div className="field-shell rounded-2xl">
                             <textarea
-                              className="min-h-24 w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                              className="min-h-28 w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
                               value={item?.notes ?? ""}
                               onChange={(event) => updateItem(row.id, "notes", event.target.value)}
                               placeholder="Add item-specific notes"
                             />
                           </div>
                         </label>
+                      </div>
+
+                      <div className="mt-4">
+                        <LinkedPhotoPanel
+                          entries={linkedPhotos}
+                          inputId={`mobile-photo-${row.id}`}
+                          label="Section photos"
+                          linkedTemplateId={row.id}
+                          onAddFiles={mergePhotos}
+                          onRemove={removePhoto}
+                        />
                       </div>
                     </article>
                   );
@@ -388,9 +551,10 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
 
         <section className="space-y-4">
           <div>
-            <h3 className="text-lg font-semibold text-[var(--brand-navy)]">Photos</h3>
-            <p className="mt-1 text-sm text-[var(--brand-muted)]">
-              Upload from gallery or capture on site. Up to {maxUploadCount} photos, {maxUploadMb}MB each.
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">3. General photos</p>
+            <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--brand-navy)]">Add site-wide photos</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">
+              Use this for overall location context. Item-specific evidence should go on the relevant survey card above.
             </p>
           </div>
 
@@ -414,18 +578,18 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
             onDrop={(event) => {
               event.preventDefault();
               setDragActive(false);
-              mergePhotos(Array.from(event.dataTransfer.files).filter((file) => file.type.startsWith("image/")));
+              mergePhotos(Array.from(event.dataTransfer.files), null);
             }}
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-base font-semibold text-[var(--brand-navy)]">Tap to add photos</p>
+                <p className="text-base font-semibold text-[var(--brand-navy)]">General site photos</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--brand-muted)]">
-                  Camera capture is enabled on supported mobile browsers. Desktop users can also drag and drop files here.
+                  Up to {maxUploadCount} photos total across the whole form, {maxUploadMb}MB each.
                 </p>
               </div>
-              <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-[var(--brand-navy)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--brand-navy-dark)]">
-                Choose photos
+              <label className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-2xl bg-[var(--brand-navy)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--brand-navy-dark)]">
+                Choose site photos
                 <input
                   className="hidden"
                   type="file"
@@ -433,8 +597,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                   capture="environment"
                   multiple
                   onChange={(event) => {
-                    const nextFiles = Array.from(event.target.files ?? []);
-                    mergePhotos(nextFiles);
+                    mergePhotos(Array.from(event.target.files ?? []), null);
                     event.currentTarget.value = "";
                   }}
                 />
@@ -442,9 +605,9 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
             </div>
           </div>
 
-          {photoEntries.length > 0 ? (
+          {generalPhotos.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {photoEntries.map((entry, index) => (
+              {generalPhotos.map((entry) => (
                 <div key={entry.key} className="overflow-hidden rounded-[22px] border border-[var(--brand-border)] bg-white">
                   <div className="aspect-[4/3] bg-[var(--brand-surface-alt)]">
                     <Image
@@ -458,20 +621,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                   </div>
                   <div className="space-y-2 p-3">
                     <p className="line-clamp-2 text-xs font-medium leading-5 text-[var(--brand-ink)]">{entry.file.name}</p>
-                    <button
-                      className="text-xs font-semibold text-red-700"
-                      type="button"
-                      onClick={() =>
-                        setPhotoEntries((current) => {
-                          const match = current[index];
-                          if (match) {
-                            URL.revokeObjectURL(match.previewUrl);
-                          }
-
-                          return current.filter((_, photoIndex) => photoIndex !== index);
-                        })
-                      }
-                    >
+                    <button className="text-xs font-semibold text-red-700" type="button" onClick={() => removePhoto(entry.key)}>
                       Remove
                     </button>
                   </div>
@@ -485,11 +635,14 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
         {submitError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{submitError}</div> : null}
       </div>
 
-      <div className="sticky-bar-shadow fixed inset-x-0 bottom-0 z-20 border-t border-[var(--brand-border)] bg-white/92 px-4 py-3 backdrop-blur md:absolute md:inset-x-auto md:bottom-0 md:left-0 md:right-0 md:rounded-b-[28px]">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
-          <p className="hidden text-sm text-[var(--brand-muted)] sm:block">Submitting saves the record, generates a PDF and CSV, and emails the office automatically.</p>
+      <div className="sticky-bar-shadow fixed inset-x-0 bottom-0 z-20 border-t border-[var(--brand-border)] bg-white/95 px-4 py-3 backdrop-blur [padding-bottom:calc(env(safe-area-inset-bottom)+0.75rem)] md:absolute md:inset-x-auto md:bottom-0 md:left-0 md:right-0 md:rounded-b-[28px] md:[padding-bottom:0.75rem]">
+        <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-[var(--brand-muted)]">
+            <p className="font-medium text-[var(--brand-ink)]">{photoEntries.length} photos ready</p>
+            <p>Submitting saves the survey, generates the PDF and CSV, and emails the office automatically.</p>
+          </div>
           <button
-            className="ml-auto inline-flex min-h-12 min-w-40 items-center justify-center rounded-2xl bg-[var(--brand-navy)] px-6 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-navy-dark)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[var(--brand-navy)] px-6 py-3 text-base font-semibold text-white transition hover:bg-[var(--brand-navy-dark)] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-48"
             type="submit"
             disabled={isPending}
           >

@@ -6,13 +6,14 @@ import { buildSubmissionPdf } from "@/lib/pdf";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { saveGeneratedFile, saveUploadedPhotos } from "@/lib/storage";
 import { makeReference } from "@/lib/utils";
-import { ensureSubmissionHasContent, validateEditableItems, validateSubmissionMetadata, validateUploads } from "@/lib/validation";
-import type { EditableLineItem, SubmissionMetadata } from "@/types";
+import { ensureSubmissionHasContent, validateEditableItems, validatePhotoLinks, validateSubmissionMetadata, validateUploads } from "@/lib/validation";
+import type { EditableLineItem, PhotoLinkInput, SubmissionMetadata } from "@/types";
 
 type SubmissionContext = {
   metadata: SubmissionMetadata;
   items: EditableLineItem[];
   photos: File[];
+  photoLinks: PhotoLinkInput[];
   honeypotValue: string;
   ipAddress: string;
   userAgent: string;
@@ -34,11 +35,12 @@ export async function processSubmission(context: SubmissionContext) {
   const metadata = validateSubmissionMetadata(context.metadata);
   const normalisedItems = validateEditableItems(context.items);
   validateUploads(context.photos);
+  const validatedPhotoLinks = validatePhotoLinks(context.photoLinks, context.photos.length);
   ensureSubmissionHasContent(normalisedItems, context.photos.length);
 
   const reference = makeReference();
   const createdAt = new Date().toISOString();
-  const storedPhotos = await saveUploadedPhotos(reference, context.photos);
+  const storedPhotos = await saveUploadedPhotos(reference, context.photos, validatedPhotoLinks);
   const csvBuffer = buildSubmissionCsv({
     ...metadata,
     reference,
@@ -149,13 +151,26 @@ export async function processSubmission(context: SubmissionContext) {
           stored_name,
           relative_path,
           mime_type,
-          size_bytes
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          size_bytes,
+          linked_template_id,
+          linked_section_name,
+          linked_description
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     );
 
     for (const photo of storedPhotos) {
-      photoInsert.run(submissionId, photo.originalName, photo.storedName, photo.relativePath, photo.mimeType, photo.sizeBytes);
+      photoInsert.run(
+        submissionId,
+        photo.originalName,
+        photo.storedName,
+        photo.relativePath,
+        photo.mimeType,
+        photo.sizeBytes,
+        photo.linkedTemplateId,
+        photo.linkedSectionName,
+        photo.linkedDescription,
+      );
     }
   });
 

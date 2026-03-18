@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { processSubmission } from "@/lib/submission-service";
-import type { EditableLineItem } from "@/types";
+import type { EditableLineItem, PhotoLinkInput } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     }
 
     const rawItems = JSON.parse(itemsPayload) as EditableLineItem[];
+    const rawPhotoLinks = JSON.parse(String(formData.get("photoLinks") ?? "[]")) as PhotoLinkInput[];
     const photos = formData.getAll("photos").filter((entry): entry is File => entry instanceof File);
     const result = await processSubmission({
       metadata: {
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
       },
       items: rawItems,
       photos,
+      photoLinks: rawPhotoLinks,
       honeypotValue: String(formData.get("companyWebsite") ?? ""),
       ipAddress: getIpAddress(request),
       userAgent: request.headers.get("user-agent") ?? "",

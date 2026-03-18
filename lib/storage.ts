@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { SURVEY_TEMPLATE } from "@/data/survey-template";
 import { getServerConfig } from "@/lib/config";
 import { sanitizeFilename, slugify } from "@/lib/utils";
-import type { StoredPhoto } from "@/types";
+import type { PhotoLinkInput, StoredPhoto } from "@/types";
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -28,7 +29,17 @@ function ensureDir(dirPath: string) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-export async function saveUploadedPhotos(reference: string, files: File[]) {
+const templateLookup = new Map(
+  SURVEY_TEMPLATE.map((row) => [
+    row.id,
+    {
+      section: row.section,
+      description: row.description,
+    },
+  ]),
+);
+
+export async function saveUploadedPhotos(reference: string, files: File[], photoLinks: PhotoLinkInput[]) {
   const uploadRoot = resolveRoot(getServerConfig().uploadRoot);
   const targetDir = path.join(uploadRoot, slugify(reference));
   ensureDir(targetDir);
@@ -36,11 +47,14 @@ export async function saveUploadedPhotos(reference: string, files: File[]) {
   const storedPhotos: StoredPhoto[] = [];
 
   for (const [index, file] of files.entries()) {
+    const linkedTemplateId = photoLinks[index]?.linkedTemplateId ?? null;
+    const linkedRow = linkedTemplateId ? templateLookup.get(linkedTemplateId) : null;
     const fileExtension = path.extname(file.name).toLowerCase();
     const fallbackExtension = (MIME_EXTENSION_MAP[file.type] ?? fileExtension) || ".bin";
     const sanitised = sanitizeFilename(file.name);
     const baseName = path.basename(sanitised, path.extname(sanitised));
-    const storedName = `${String(index + 1).padStart(2, "0")}-${baseName}${fallbackExtension}`;
+    const sectionPrefix = linkedTemplateId ? slugify(linkedTemplateId) : "general";
+    const storedName = `${String(index + 1).padStart(2, "0")}-${sectionPrefix}-${baseName}${fallbackExtension}`;
     const absolutePath = path.join(targetDir, storedName);
     const relativePath = path.relative(process.cwd(), absolutePath).replace(/\\/g, "/");
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -54,6 +68,9 @@ export async function saveUploadedPhotos(reference: string, files: File[]) {
       absolutePath,
       mimeType: file.type,
       sizeBytes: buffer.length,
+      linkedTemplateId,
+      linkedSectionName: linkedRow?.section ?? "General",
+      linkedDescription: linkedRow?.description ?? "Site-wide photo",
     });
   }
 

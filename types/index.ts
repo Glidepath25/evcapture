@@ -18,6 +18,10 @@ export type EditableLineItem = {
   notes: string;
 };
 
+export type PhotoLinkInput = {
+  linkedTemplateId: string | null;
+};
+
 export type NormalizedLineItem = {
   templateId: string;
   chargeType: string;
@@ -44,6 +48,9 @@ export type StoredPhoto = {
   absolutePath: string;
   mimeType: string;
   sizeBytes: number;
+  linkedTemplateId: string | null;
+  linkedSectionName: string;
+  linkedDescription: string;
 };
 
 export type SubmissionSummary = SubmissionMetadata & {

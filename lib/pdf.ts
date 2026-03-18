@@ -57,47 +57,75 @@ async function addPhotos(doc: PDFKit.PDFDocument, photos: StoredPhoto[]) {
     return;
   }
 
+  const photoGroups = [
+    {
+      label: "General site photos",
+      photos: photos.filter((photo) => !photo.linkedTemplateId),
+    },
+    ...Array.from(new Set(photos.filter((photo) => photo.linkedTemplateId).map((photo) => photo.linkedTemplateId))).map((templateId) => {
+      const groupedPhotos = photos.filter((photo) => photo.linkedTemplateId === templateId);
+      return {
+        label: `${groupedPhotos[0]?.linkedSectionName ?? "Section"}: ${groupedPhotos[0]?.linkedDescription ?? "Linked photos"}`,
+        photos: groupedPhotos,
+      };
+    }),
+  ].filter((group) => group.photos.length > 0);
+
   doc.addPage({ margin: PAGE_MARGIN });
   doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(18).text("Uploaded Photos");
   doc.moveDown(0.6);
 
-  let x = PAGE_MARGIN;
-  let y = doc.y;
   const boxWidth = 240;
   const boxHeight = 170;
+  let x = PAGE_MARGIN;
+  let y = doc.y;
 
-  for (const photo of photos) {
-    if (y + boxHeight + 40 > doc.page.height - PAGE_MARGIN) {
+  for (const group of photoGroups) {
+    if (y + 30 > doc.page.height - PAGE_MARGIN) {
       doc.addPage({ margin: PAGE_MARGIN });
-      x = PAGE_MARGIN;
       y = PAGE_MARGIN;
-    }
-
-    try {
-      const transformed = await sharp(fs.readFileSync(photo.absolutePath))
-        .rotate()
-        .resize({ width: 700, height: 500, fit: "inside", withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toBuffer();
-
-      doc.roundedRect(x, y, boxWidth, boxHeight, 10).fillAndStroke("#f7f9fc", "#d5deea");
-      doc.image(transformed, x + 10, y + 10, { fit: [boxWidth - 20, boxHeight - 38], align: "center", valign: "center" });
-      doc.fillColor("#1f2f3d").font("Helvetica").fontSize(9).text(photo.originalName, x + 10, y + boxHeight - 20, {
-        width: boxWidth - 20,
-      });
-    } catch {
-      doc.roundedRect(x, y, boxWidth, boxHeight, 10).fillAndStroke("#f7f9fc", "#d5deea");
-      doc.fillColor("#9b1c1c").font("Helvetica").fontSize(10).text(`Preview unavailable: ${photo.originalName}`, x + 12, y + 12, {
-        width: boxWidth - 24,
-      });
-    }
-
-    if (x + boxWidth * 2 + 16 <= doc.page.width - PAGE_MARGIN) {
-      x += boxWidth + 16;
-    } else {
       x = PAGE_MARGIN;
-      y += boxHeight + 20;
     }
+
+    doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(12).text(group.label, PAGE_MARGIN, y);
+    y = doc.y + 8;
+    x = PAGE_MARGIN;
+
+    for (const photo of group.photos) {
+      if (y + boxHeight + 36 > doc.page.height - PAGE_MARGIN) {
+        doc.addPage({ margin: PAGE_MARGIN });
+        x = PAGE_MARGIN;
+        y = PAGE_MARGIN;
+      }
+
+      try {
+        const transformed = await sharp(fs.readFileSync(photo.absolutePath))
+          .rotate()
+          .resize({ width: 700, height: 500, fit: "inside", withoutEnlargement: true })
+          .jpeg({ quality: 82 })
+          .toBuffer();
+
+        doc.roundedRect(x, y, boxWidth, boxHeight, 10).fillAndStroke("#f7f9fc", "#d5deea");
+        doc.image(transformed, x + 10, y + 10, { fit: [boxWidth - 20, boxHeight - 38], align: "center", valign: "center" });
+        doc.fillColor("#1f2f3d").font("Helvetica").fontSize(9).text(photo.originalName, x + 10, y + boxHeight - 20, {
+          width: boxWidth - 20,
+        });
+      } catch {
+        doc.roundedRect(x, y, boxWidth, boxHeight, 10).fillAndStroke("#f7f9fc", "#d5deea");
+        doc.fillColor("#9b1c1c").font("Helvetica").fontSize(10).text(`Preview unavailable: ${photo.originalName}`, x + 12, y + 12, {
+          width: boxWidth - 24,
+        });
+      }
+
+      if (x + boxWidth * 2 + 16 <= doc.page.width - PAGE_MARGIN) {
+        x += boxWidth + 16;
+      } else {
+        x = PAGE_MARGIN;
+        y += boxHeight + 20;
+      }
+    }
+
+    y += boxHeight + 18;
   }
 }
 
@@ -128,6 +156,16 @@ export async function buildSubmissionPdf(input: PdfInput) {
 
   let currentSection = "";
   doc.font("Helvetica").fontSize(9).fillColor("#1f2f3d");
+  const linkedPhotoMap = new Map<string, StoredPhoto[]>();
+  for (const photo of input.photos) {
+    if (!photo.linkedTemplateId) {
+      continue;
+    }
+
+    const current = linkedPhotoMap.get(photo.linkedTemplateId) ?? [];
+    current.push(photo);
+    linkedPhotoMap.set(photo.linkedTemplateId, current);
+  }
 
   for (const item of input.items) {
     if (item.section !== currentSection) {
@@ -152,7 +190,11 @@ export async function buildSubmissionPdf(input: PdfInput) {
     }
 
     const descriptionText = descriptionParts.join("\n\n");
-    const height = rowHeight(doc, descriptionText, item.quantity?.toString() ?? "-", item.notes);
+    const linkedPhotos = linkedPhotoMap.get(item.templateId) ?? [];
+    const notesText = [item.notes || "-", linkedPhotos.length > 0 ? `Photos: ${linkedPhotos.map((photo) => photo.storedName).join(", ")}` : ""]
+      .filter(Boolean)
+      .join("\n\n");
+    const height = rowHeight(doc, descriptionText, item.quantity?.toString() ?? "-", notesText);
 
     if (currentY + height > doc.page.height - PAGE_MARGIN) {
       doc.addPage({ margin: PAGE_MARGIN });
@@ -165,7 +207,7 @@ export async function buildSubmissionPdf(input: PdfInput) {
     doc.text(item.chargeType, PAGE_MARGIN + 8, currentY + 8, { width: 95 });
     doc.text(descriptionText, PAGE_MARGIN + 110, currentY + 8, { width: 230 });
     doc.text(item.quantity === null ? "-" : item.quantity.toString(), PAGE_MARGIN + 345, currentY + 8, { width: 40, align: "right" });
-    doc.text(item.notes || "-", PAGE_MARGIN + 390, currentY + 8, { width: 165 });
+    doc.text(notesText, PAGE_MARGIN + 390, currentY + 8, { width: 165 });
     currentY += height;
   }
 

@@ -8,11 +8,11 @@ export default function HomePage() {
   const projects = getProjects();
 
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-screen px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <section className="surface-card overflow-hidden rounded-[28px]">
           <div className="grid gap-0 lg:grid-cols-[1.05fr_1.35fr]">
-            <div className="bg-[linear-gradient(160deg,#10315a_0%,#153c6d_58%,#24588f_100%)] px-6 py-8 text-white sm:px-8 lg:px-10">
+            <div className="hidden bg-[linear-gradient(160deg,#10315a_0%,#153c6d_58%,#24588f_100%)] px-6 py-8 text-white sm:px-8 lg:block lg:px-10">
               <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/8 px-4 py-2 text-sm font-medium uppercase tracking-[0.18em] text-white/90">
                 <span className="h-2.5 w-2.5 rounded-full bg-cyan-300" />
                 Glidepath Solutions
@@ -42,7 +42,7 @@ export default function HomePage() {
                 </div>
               </dl>
             </div>
-            <div className="bg-white px-4 py-6 sm:px-8 sm:py-8">
+            <div className="bg-white px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
               <SurveyForm
                 projects={projects}
                 templateRows={SURVEY_TEMPLATE}

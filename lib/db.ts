@@ -5,6 +5,15 @@ import { getServerConfig } from "@/lib/config";
 
 let database: Database.Database | null = null;
 
+function ensureColumn(db: Database.Database, tableName: string, columnName: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  const hasColumn = columns.some((column) => column.name === columnName);
+
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 function initialise(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS submissions (
@@ -48,6 +57,9 @@ function initialise(db: Database.Database) {
       relative_path TEXT NOT NULL,
       mime_type TEXT NOT NULL,
       size_bytes INTEGER NOT NULL,
+      linked_template_id TEXT,
+      linked_section_name TEXT NOT NULL DEFAULT 'General',
+      linked_description TEXT NOT NULL DEFAULT 'Site-wide photo',
       FOREIGN KEY(submission_id) REFERENCES submissions(id) ON DELETE CASCADE
     );
 
@@ -71,6 +83,10 @@ function initialise(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_submission_photos_submission_id ON submission_photos(submission_id);
     CREATE INDEX IF NOT EXISTS idx_submission_logs_reference ON submission_logs(submission_reference);
   `);
+
+  ensureColumn(db, "submission_photos", "linked_template_id", "TEXT");
+  ensureColumn(db, "submission_photos", "linked_section_name", "TEXT NOT NULL DEFAULT 'General'");
+  ensureColumn(db, "submission_photos", "linked_description", "TEXT NOT NULL DEFAULT 'Site-wide photo'");
 }
 
 export function getDb() {

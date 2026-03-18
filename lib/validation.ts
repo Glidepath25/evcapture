@@ -2,7 +2,7 @@ import { SURVEY_TEMPLATE } from "@/data/survey-template";
 import { getServerConfig } from "@/lib/config";
 import { SUPPORTED_IMAGE_TYPES } from "@/lib/storage";
 import { bytesToMegabytes, normaliseMultiline } from "@/lib/utils";
-import type { EditableLineItem, NormalizedLineItem, SubmissionMetadata } from "@/types";
+import type { EditableLineItem, NormalizedLineItem, PhotoLinkInput, SubmissionMetadata } from "@/types";
 import { z } from "zod";
 
 const metadataSchema = z.object({
@@ -20,6 +20,10 @@ const editableLineItemSchema = z.object({
   templateId: z.string().trim().min(1),
   quantity: z.string().trim().max(40),
   notes: z.string().trim().max(500, "Line item notes must be 500 characters or fewer."),
+});
+
+const photoLinkSchema = z.object({
+  linkedTemplateId: z.string().trim().min(1).nullable(),
 });
 
 export function validateSubmissionMetadata(input: SubmissionMetadata) {
@@ -78,6 +82,22 @@ export function validateUploads(files: File[]) {
       throw new Error(`"${file.name}" is ${bytesToMegabytes(file.size)}MB. Max size is ${config.maxUploadMb}MB.`);
     }
   }
+}
+
+export function validatePhotoLinks(photoLinks: PhotoLinkInput[], fileCount: number) {
+  const parsedLinks = z.array(photoLinkSchema).parse(photoLinks);
+  if (parsedLinks.length !== fileCount) {
+    throw new Error("Photo metadata does not match the uploaded files.");
+  }
+
+  const validTemplateIds = new Set(SURVEY_TEMPLATE.map((row) => row.id));
+  for (const link of parsedLinks) {
+    if (link.linkedTemplateId && !validTemplateIds.has(link.linkedTemplateId)) {
+      throw new Error("A photo was linked to an unknown survey item.");
+    }
+  }
+
+  return parsedLinks;
 }
 
 export function ensureSubmissionHasContent(items: NormalizedLineItem[], photoCount: number) {
