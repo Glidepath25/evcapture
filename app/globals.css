@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --brand-navy: #10315a;
+  --brand-navy-dark: #0b2341;
+  --brand-blue-soft: #dfe9f4;
+  --brand-ink: #1f2f3d;
+  --brand-muted: #5f7288;
+  --brand-border: #d7e0ea;
+  --brand-surface: #ffffff;
+  --brand-surface-alt: #f5f8fb;
+  --brand-success: #d9f3e5;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(16, 49, 90, 0.08), transparent 26%),
+    linear-gradient(180deg, #f6f9fc 0%, #eef3f8 100%);
+}
+
+body {
+  color: var(--brand-ink);
+  min-height: 100vh;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.surface-card {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--brand-border);
+  box-shadow: 0 24px 70px rgba(16, 49, 90, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.field-shell {
+  border: 1px solid var(--brand-border);
+  background: var(--brand-surface);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.field-shell:focus-within {
+  border-color: var(--brand-navy);
+  box-shadow: 0 0 0 3px rgba(16, 49, 90, 0.12);
+}
+
+.data-grid-header {
+  background: var(--brand-navy);
+  color: white;
+}
+
+.sticky-bar-shadow {
+  box-shadow: 0 -14px 30px rgba(16, 49, 90, 0.08);
+}

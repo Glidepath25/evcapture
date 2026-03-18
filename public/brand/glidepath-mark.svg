@@ -1,0 +1,6 @@
+<svg width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="160" height="40" rx="20" fill="#10315A"/>
+  <path d="M23 27C19.6863 27 17 24.3137 17 21C17 17.6863 19.6863 15 23 15H28.5" stroke="#8DD6FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M31 13L38 20L31 27" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="50" y="25" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="700">EVcapture</text>
+</svg>
