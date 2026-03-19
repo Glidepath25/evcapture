@@ -55,7 +55,7 @@ export function validateEditableItems(items: EditableLineItem[]) {
         const rawValue = current?.optionQuantities?.[option.id]?.trim() ?? "";
         const parsedValue = rawValue === "" ? null : Number(rawValue);
 
-        if (rawValue !== "" && (!Number.isFinite(parsedValue) || parsedValue < 0)) {
+        if (rawValue !== "" && (parsedValue === null || !Number.isFinite(parsedValue) || parsedValue < 0)) {
           throw new Error(`Quantity for "${templateRow.description}" option "${option.label}" must be a valid number.`);
         }
 
