@@ -32,6 +32,8 @@ type PhotoPanelProps = {
   onRemove: (key: string) => void;
 };
 
+const MAX_PROJECT_RESULTS = 10;
+
 function buildDefaultItems(rows: SurveyTemplateRow[]): EditableLineItem[] {
   return rows.map((row) => ({
     templateId: row.id,
@@ -186,6 +188,8 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
   const router = useRouter();
   const [items, setItems] = useState<EditableLineItem[]>(() => buildDefaultItems(templateRows));
   const [project, setProject] = useState("");
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [surveyorName, setSurveyorName] = useState("");
   const [surveyDate, setSurveyDate] = useState(todayIsoDate());
   const [siteLocation, setSiteLocation] = useState("");
@@ -295,8 +299,13 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
 
   function validateClientSide() {
     const nextErrors: FieldErrors = {};
-    if (!project) {
-      nextErrors.project = "Project is required.";
+    const exactProjectMatch = projects.find((projectOption) => projectOption.name.toLowerCase() === projectQuery.trim().toLowerCase());
+    if (!project && exactProjectMatch) {
+      setProject(exactProjectMatch.name);
+    }
+
+    if (!(project || exactProjectMatch?.name)) {
+      nextErrors.project = "Select a project from the list.";
     }
     if (!surveyorName.trim()) {
       nextErrors.surveyorName = "Surveyor name is required.";
@@ -319,8 +328,9 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
   }
 
   async function submitForm() {
+    const selectedProject = projects.find((projectOption) => projectOption.name.toLowerCase() === projectQuery.trim().toLowerCase())?.name ?? project;
     const formData = new FormData();
-    formData.set("project", project);
+    formData.set("project", selectedProject);
     formData.set("surveyorName", surveyorName);
     formData.set("surveyDate", surveyDate);
     formData.set("siteLocation", siteLocation);
@@ -393,6 +403,37 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
   }, []);
 
   const generalPhotos = photoEntries.filter((entry) => entry.linkedTemplateId === null);
+  const normalisedProjectQuery = projectQuery.trim().toLowerCase();
+  const filteredProjects = projects
+    .filter((projectOption) => projectOption.name.toLowerCase().includes(normalisedProjectQuery))
+    .slice(0, MAX_PROJECT_RESULTS);
+
+  function selectProject(projectName: string) {
+    setProject(projectName);
+    setProjectQuery(projectName);
+    setProjectMenuOpen(false);
+    setErrors((current) => {
+      if (!current.project) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next.project;
+      return next;
+    });
+  }
+
+  function syncProjectFromQuery() {
+    const exactMatch = projects.find((projectOption) => projectOption.name.toLowerCase() === projectQuery.trim().toLowerCase());
+    if (exactMatch) {
+      selectProject(exactMatch.name);
+      return;
+    }
+
+    if (projectQuery.trim() !== project) {
+      setProject("");
+    }
+  }
 
   return (
     <form className="relative" onSubmit={handleSubmit}>
@@ -431,21 +472,56 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
           <div className="grid gap-4 lg:grid-cols-2">
             <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
               <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Project *</span>
-              <div className="field-shell rounded-2xl">
-                <select
-                  className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-                  value={project}
-                  onChange={(event) => setProject(event.target.value)}
-                >
-                  <option value="">Select a project</option>
-                  {projects.map((projectOption) => (
-                    <option key={projectOption.id} value={projectOption.name}>
-                      {projectOption.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="relative">
+                <div className="field-shell rounded-2xl">
+                  <input
+                    className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                    value={projectQuery}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setProjectQuery(nextValue);
+                      if (nextValue !== project) {
+                        setProject("");
+                      }
+                      setProjectMenuOpen(true);
+                    }}
+                    onFocus={() => setProjectMenuOpen(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => {
+                        syncProjectFromQuery();
+                        setProjectMenuOpen(false);
+                      }, 120);
+                    }}
+                    placeholder="Start typing project or site name"
+                    autoComplete="off"
+                  />
+                </div>
+                {projectMenuOpen && filteredProjects.length > 0 ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[22px] border border-[var(--brand-border)] bg-white shadow-[0_16px_40px_rgba(16,49,90,0.12)]">
+                    <div className="max-h-72 overflow-y-auto py-2">
+                      {filteredProjects.map((projectOption) => (
+                        <button
+                          key={projectOption.id}
+                          type="button"
+                          className={cn(
+                            "w-full px-4 py-3 text-left text-sm transition hover:bg-[var(--brand-surface-alt)]",
+                            project === projectOption.name ? "bg-[var(--brand-blue-soft)]/55 font-semibold text-[var(--brand-navy)]" : "text-[var(--brand-ink)]",
+                          )}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectProject(projectOption.name)}
+                        >
+                          {projectOption.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              {errors.project ? <p className="mt-2 text-sm text-red-700">{errors.project}</p> : null}
+              {errors.project ? (
+                <p className="mt-2 text-sm text-red-700">{errors.project}</p>
+              ) : (
+                <p className="mt-2 text-xs leading-5 text-[var(--brand-muted)]">Type a few letters to narrow the list, then tap the correct project.</p>
+              )}
             </label>
 
             <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
