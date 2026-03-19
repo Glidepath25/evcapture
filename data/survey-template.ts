@@ -46,14 +46,22 @@ export const SURVEY_TEMPLATE: SurveyTemplateRow[] = [
       "Installation of sign post (free issue by weev) including excavation, concrete surround, backfill and make good.",
   },
   {
-    id: "civils-trackwork-duct-installation",
+    id: "civils-trackwork-duct-installation-double-units",
     section: "Civils",
     chargeType: "Civils",
-    description: "Trackwork & Duct Installation",
+    description: "Trackwork & Duct Installation - Double Units",
     additionalDescription:
       "Excavate through existing footway 600mm depth for new cable duct; dispose off site; lay 100mm cable duct on 50mm fine sand bed and surround on 350mm type 1 fill; 80mm base course; 30mm wearing course.",
-    notesGuidance:
-      "1) 17nr Double Units (2 charging bay requirements) allowed 15m length each. 2) 93 nr Single units (1 charging bay requirement) allowed 10m length each.",
+    notesGuidance: "17nr Double Units (2 charging bay requirements) allowed 15m length each.",
+  },
+  {
+    id: "civils-trackwork-duct-installation-single-units",
+    section: "Civils",
+    chargeType: "Civils",
+    description: "Trackwork & Duct Installation - Single Units",
+    additionalDescription:
+      "Excavate through existing footway 600mm depth for new cable duct; dispose off site; lay 100mm cable duct on 50mm fine sand bed and surround on 350mm type 1 fill; 80mm base course; 30mm wearing course.",
+    notesGuidance: "93 nr Single units (1 charging bay requirement) allowed 10m length each.",
   },
   {
     id: "civils-nie-ductwork",
