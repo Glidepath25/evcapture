@@ -189,6 +189,7 @@ export async function processSubmission(context: SubmissionContext) {
           INSERT INTO submissions (
             reference,
             project,
+            survey_type,
             surveyor_name,
             survey_date,
             site_location,
@@ -205,6 +206,7 @@ export async function processSubmission(context: SubmissionContext) {
           ) VALUES (
             @reference,
             @project,
+            @surveyType,
             @surveyorName,
             @surveyDate,
             @siteLocation,
@@ -224,6 +226,7 @@ export async function processSubmission(context: SubmissionContext) {
       .run({
         reference,
         project: metadata.project,
+        surveyType: metadata.surveyType,
         surveyorName: metadata.surveyorName,
         surveyDate: metadata.surveyDate,
         siteLocation: metadata.siteLocation,
@@ -301,6 +304,7 @@ export async function processSubmission(context: SubmissionContext) {
   saveSubmission();
   writeLog("info", "Submission stored successfully.", reference, {
     project: metadata.project,
+    surveyType: metadata.surveyType,
     lineItemCount: SURVEY_TEMPLATE.length,
     photoCount: storedPhotos.length,
   });
@@ -323,6 +327,6 @@ export async function processSubmission(context: SubmissionContext) {
 export function getSubmissionPdf(reference: string) {
   const db = getDb();
   return db
-    .prepare("SELECT reference, pdf_path, project, survey_date FROM submissions WHERE reference = ?")
-    .get(reference) as { reference: string; pdf_path: string | null; project: string; survey_date: string } | undefined;
+    .prepare("SELECT reference, pdf_path, project, survey_type, survey_date FROM submissions WHERE reference = ?")
+    .get(reference) as { reference: string; pdf_path: string | null; project: string; survey_type: string; survey_date: string } | undefined;
 }

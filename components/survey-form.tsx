@@ -33,6 +33,7 @@ type PhotoPanelProps = {
 };
 
 const MAX_PROJECT_RESULTS = 10;
+const SURVEY_TYPE_OPTIONS = ["Pre-construction survey", "Build complete Survey"] as const;
 
 function buildDefaultItems(rows: SurveyTemplateRow[]): EditableLineItem[] {
   return rows.map((row) => ({
@@ -190,6 +191,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
   const [project, setProject] = useState("");
   const [projectQuery, setProjectQuery] = useState("");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [surveyType, setSurveyType] = useState("");
   const [surveyorName, setSurveyorName] = useState("");
   const [surveyDate, setSurveyDate] = useState(todayIsoDate());
   const [siteLocation, setSiteLocation] = useState("");
@@ -307,6 +309,9 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     if (!(project || exactProjectMatch?.name)) {
       nextErrors.project = "Select a project from the list.";
     }
+    if (!surveyType) {
+      nextErrors.surveyType = "Type of survey is required.";
+    }
     if (!surveyorName.trim()) {
       nextErrors.surveyorName = "Surveyor name is required.";
     }
@@ -331,6 +336,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     const selectedProject = projects.find((projectOption) => projectOption.name.toLowerCase() === projectQuery.trim().toLowerCase())?.name ?? project;
     const formData = new FormData();
     formData.set("project", selectedProject);
+    formData.set("surveyType", surveyType);
     formData.set("surveyorName", surveyorName);
     formData.set("surveyDate", surveyDate);
     formData.set("siteLocation", siteLocation);
@@ -522,6 +528,25 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
               ) : (
                 <p className="mt-2 text-xs leading-5 text-[var(--brand-muted)]">Type a few letters to narrow the list, then tap the correct project.</p>
               )}
+            </label>
+
+            <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">
+              <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Type of Survey *</span>
+              <div className="field-shell rounded-2xl">
+                <select
+                  className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                  value={surveyType}
+                  onChange={(event) => setSurveyType(event.target.value)}
+                >
+                  <option value="">Select survey type</option>
+                  {SURVEY_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {errors.surveyType ? <p className="mt-2 text-sm text-red-700">{errors.surveyType}</p> : null}
             </label>
 
             <label className="block rounded-[22px] border border-[var(--brand-border)] bg-white p-4">

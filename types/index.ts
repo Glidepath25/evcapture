@@ -49,6 +49,7 @@ export type NormalizedQuantityOption = QuantityOption & {
 
 export type SubmissionMetadata = {
   project: string;
+  surveyType: string;
   surveyorName: string;
   surveyDate: string;
   siteLocation: string;

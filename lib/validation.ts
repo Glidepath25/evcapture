@@ -8,6 +8,7 @@ import { z } from "zod";
 
 const metadataSchema = z.object({
   project: z.string().trim().min(1, "Project is required.").max(120),
+  surveyType: z.string().trim().min(1, "Type of survey is required.").max(120),
   surveyorName: z.string().trim().min(1, "Surveyor name is required.").max(120),
   surveyDate: z
     .string()

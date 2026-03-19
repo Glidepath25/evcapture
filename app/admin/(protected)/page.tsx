@@ -127,6 +127,7 @@ export default async function AdminListPage({ searchParams }: AdminListPageProps
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold">Reference</th>
                   <th className="px-4 py-3 text-left font-semibold">Project</th>
+                  <th className="px-4 py-3 text-left font-semibold">Type</th>
                   <th className="px-4 py-3 text-left font-semibold">Surveyor</th>
                   <th className="px-4 py-3 text-left font-semibold">Survey date</th>
                   <th className="px-4 py-3 text-left font-semibold">Created</th>
@@ -146,6 +147,7 @@ export default async function AdminListPage({ searchParams }: AdminListPageProps
                         </Link>
                       </td>
                       <td className="px-4 py-3">{submission.project}</td>
+                      <td className="px-4 py-3">{submission.survey_type || "-"}</td>
                       <td className="px-4 py-3">{submission.surveyor_name}</td>
                       <td className="px-4 py-3">{formatDate(submission.survey_date)}</td>
                       <td className="px-4 py-3">{formatDate(submission.created_at)}</td>
@@ -163,7 +165,7 @@ export default async function AdminListPage({ searchParams }: AdminListPageProps
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-[var(--brand-muted)]">
+                    <td colSpan={10} className="px-4 py-10 text-center text-[var(--brand-muted)]">
                       No submissions matched the current filters.
                     </td>
                   </tr>

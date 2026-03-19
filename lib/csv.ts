@@ -19,6 +19,7 @@ export function buildSubmissionCsv(input: CsvInput) {
     reference: input.reference,
     submission_timestamp: formatSubmissionTimestamp(input.createdAt),
     project: input.project,
+    survey_type: input.surveyType,
     surveyor_name: input.surveyorName,
     survey_date: input.surveyDate,
     site_location: input.siteLocation,

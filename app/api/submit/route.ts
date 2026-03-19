@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     const result = await processSubmission({
       metadata: {
         project: String(formData.get("project") ?? ""),
+        surveyType: String(formData.get("surveyType") ?? ""),
         surveyorName: String(formData.get("surveyorName") ?? ""),
         surveyDate: String(formData.get("surveyDate") ?? ""),
         siteLocation: String(formData.get("siteLocation") ?? ""),

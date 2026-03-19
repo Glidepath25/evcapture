@@ -121,6 +121,10 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
                 <dd>{submission.project}</dd>
               </div>
               <div className="grid gap-1 sm:grid-cols-[160px,1fr]">
+                <dt className="font-semibold text-[var(--brand-muted)]">Type of survey</dt>
+                <dd>{submission.survey_type || "Not provided"}</dd>
+              </div>
+              <div className="grid gap-1 sm:grid-cols-[160px,1fr]">
                 <dt className="font-semibold text-[var(--brand-muted)]">Surveyor name</dt>
                 <dd>{submission.surveyor_name}</dd>
               </div>

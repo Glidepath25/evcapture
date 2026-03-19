@@ -14,6 +14,7 @@ export type AdminSubmissionFilters = {
 export type AdminSubmissionListItem = {
   reference: string;
   project: string;
+  survey_type: string;
   surveyor_name: string;
   survey_date: string;
   created_at: string;
@@ -28,6 +29,7 @@ export type AdminSubmissionSummary = {
   id: number;
   reference: string;
   project: string;
+  survey_type: string;
   surveyor_name: string;
   survey_date: string;
   site_location: string;
@@ -130,6 +132,7 @@ export function getAdminSubmissionsList(filters: AdminSubmissionFilters) {
         SELECT
           reference,
           project,
+          survey_type,
           surveyor_name,
           survey_date,
           created_at,
@@ -190,6 +193,7 @@ export function getAdminSubmissionDetail(reference: string) {
           id,
           reference,
           project,
+          survey_type,
           surveyor_name,
           survey_date,
           site_location,

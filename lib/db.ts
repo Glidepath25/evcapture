@@ -20,6 +20,7 @@ function initialise(db: Database.Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       reference TEXT NOT NULL UNIQUE,
       project TEXT NOT NULL,
+      survey_type TEXT NOT NULL DEFAULT '',
       surveyor_name TEXT NOT NULL,
       survey_date TEXT NOT NULL,
       site_location TEXT NOT NULL DEFAULT '',
@@ -87,6 +88,7 @@ function initialise(db: Database.Database) {
   `);
 
   ensureColumn(db, "submissions", "pdf_status", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(db, "submissions", "survey_type", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "submission_items", "quantity_breakdown_json", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "submission_photos", "linked_template_id", "TEXT");
   ensureColumn(db, "submission_photos", "linked_section_name", "TEXT NOT NULL DEFAULT 'General'");

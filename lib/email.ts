@@ -9,8 +9,8 @@ type EmailInput = SubmissionMetadata & {
   csvBuffer: Buffer;
 };
 
-function buildSubject(project: string, surveyDate: string) {
-  return `Site survey received - ${project} - ${surveyDate}`;
+function buildSubject(project: string, surveyType: string, surveyDate: string) {
+  return `${project} - ${surveyType} - ${surveyDate}`;
 }
 
 export async function sendSubmissionEmail(input: EmailInput) {
@@ -20,12 +20,13 @@ export async function sendSubmissionEmail(input: EmailInput) {
     throw new Error("DESTINATION_EMAIL is not configured.");
   }
 
-  const subject = buildSubject(input.project, input.surveyDate);
+  const subject = buildSubject(input.project, input.surveyType, input.surveyDate);
   const textBody = [
     "A new Glidepath site survey submission has been received.",
     "",
     `Reference: ${input.reference}`,
     `Project: ${input.project}`,
+    `Type of survey: ${input.surveyType}`,
     `Surveyor: ${input.surveyorName}`,
     `Survey date: ${input.surveyDate}`,
     `Site location: ${input.siteLocation || "-"}`,

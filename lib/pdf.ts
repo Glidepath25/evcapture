@@ -78,13 +78,14 @@ function renderSubmissionPdf(doc: PDFKit.PDFDocument, input: PdfInput) {
   addFieldBlock(doc, "Survey Date", formatSurveyDate(input.surveyDate), PAGE_MARGIN + 360, 96, 155);
   addFieldBlock(doc, "Surveyor", input.surveyorName, PAGE_MARGIN, 146, 250);
   addFieldBlock(doc, "Site Location", input.siteLocation || "-", PAGE_MARGIN + 265, 146, 250);
+  addFieldBlock(doc, "Type of Survey", input.surveyType, PAGE_MARGIN, 182, 250);
 
-  doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(11).text("General Comments", PAGE_MARGIN, 200);
-  doc.fillColor("#1f2f3d").font("Helvetica").fontSize(10).text(input.generalComments || "No general comments supplied.", PAGE_MARGIN, 217, {
+  doc.fillColor("#10315a").font("Helvetica-Bold").fontSize(11).text("General Comments", PAGE_MARGIN, 236);
+  doc.fillColor("#1f2f3d").font("Helvetica").fontSize(10).text(input.generalComments || "No general comments supplied.", PAGE_MARGIN, 253, {
     width: doc.page.width - PAGE_MARGIN * 2,
   });
 
-  let currentY = Math.max(doc.y + 20, 280);
+  let currentY = Math.max(doc.y + 20, 316);
   addTableHeader(doc, currentY);
   currentY += 24;
 
