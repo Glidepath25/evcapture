@@ -246,8 +246,9 @@ export async function processSubmission(context: SubmissionContext) {
           additional_description,
           notes_guidance,
           quantity,
+          quantity_breakdown_json,
           notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     );
 
@@ -261,6 +262,7 @@ export async function processSubmission(context: SubmissionContext) {
         item.additionalDescription ?? "",
         item.notesGuidance ?? "",
         item.quantity,
+        JSON.stringify(item.quantityOptions ?? []),
         item.notes,
       );
     }

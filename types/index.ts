@@ -10,12 +10,20 @@ export type SurveyTemplateRow = {
   description: string;
   additionalDescription?: string;
   notesGuidance?: string;
+  quantityOptions?: QuantityOption[];
+};
+
+export type QuantityOption = {
+  id: string;
+  label: string;
+  guidance?: string;
 };
 
 export type EditableLineItem = {
   templateId: string;
   quantity: string;
   notes: string;
+  optionQuantities?: Record<string, string>;
 };
 
 export type PhotoLinkInput = {
@@ -31,6 +39,12 @@ export type NormalizedLineItem = {
   quantity: number | null;
   notes: string;
   section: string;
+  quantityOptions?: NormalizedQuantityOption[];
+  quantityDisplay: string;
+};
+
+export type NormalizedQuantityOption = QuantityOption & {
+  quantity: number | null;
 };
 
 export type SubmissionMetadata = {

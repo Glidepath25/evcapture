@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { CopyReferenceButton } from "@/components/admin/copy-reference-button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { getAdminSubmissionDetail } from "@/lib/admin-data";
+import { buildQuantityDisplay } from "@/lib/quantity";
+import type { NormalizedQuantityOption } from "@/types";
 
 type SubmissionDetailPageProps = {
   params: Promise<{
@@ -29,6 +31,14 @@ function formatFileSize(bytes: number) {
   }
 
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function parseQuantityBreakdown(raw: string) {
+  try {
+    return JSON.parse(raw || "[]") as NormalizedQuantityOption[];
+  } catch {
+    return [];
+  }
 }
 
 export default async function SubmissionDetailPage({ params }: SubmissionDetailPageProps) {
@@ -188,17 +198,22 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--brand-border)] bg-white align-top">
-                {detail.items.map((item) => (
+                {detail.items.map((item) => {
+                  const quantityOptions = parseQuantityBreakdown(item.quantity_breakdown_json);
+                  const quantityDisplay = buildQuantityDisplay(item.quantity, quantityOptions) || "-";
+
+                  return (
                   <tr key={item.id}>
                     <td className="px-4 py-3">{item.section_name}</td>
                     <td className="px-4 py-3">{item.charge_type}</td>
                     <td className="px-4 py-3 font-medium text-[var(--brand-ink)]">{item.description}</td>
-                    <td className="px-4 py-3">{item.quantity ?? "-"}</td>
+                    <td className="px-4 py-3 whitespace-pre-wrap">{quantityDisplay}</td>
                     <td className="px-4 py-3 whitespace-pre-wrap">{item.notes || "-"}</td>
                     <td className="px-4 py-3 whitespace-pre-wrap text-[var(--brand-muted)]">{item.additional_description || "-"}</td>
                     <td className="px-4 py-3 whitespace-pre-wrap text-[var(--brand-muted)]">{item.notes_guidance || "-"}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

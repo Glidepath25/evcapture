@@ -1,5 +1,6 @@
 import { SURVEY_TEMPLATE } from "@/data/survey-template";
 import { getServerConfig } from "@/lib/config";
+import { buildQuantityDisplay } from "@/lib/quantity";
 import { SUPPORTED_IMAGE_TYPES } from "@/lib/storage";
 import { bytesToMegabytes, normaliseMultiline } from "@/lib/utils";
 import type { EditableLineItem, NormalizedLineItem, PhotoLinkInput, SubmissionMetadata } from "@/types";
@@ -20,6 +21,7 @@ const editableLineItemSchema = z.object({
   templateId: z.string().trim().min(1),
   quantity: z.string().trim().max(40),
   notes: z.string().trim().max(500, "Line item notes must be 500 characters or fewer."),
+  optionQuantities: z.record(z.string(), z.string().trim().max(40)).optional(),
 });
 
 const photoLinkSchema = z.object({
@@ -48,6 +50,20 @@ export function validateEditableItems(items: EditableLineItem[]) {
     const current = itemMap.get(templateRow.id);
     const quantityText = current?.quantity?.trim() ?? "";
     const parsedQuantity = quantityText === "" ? null : Number(quantityText);
+    const parsedOptionQuantities =
+      templateRow.quantityOptions?.map((option) => {
+        const rawValue = current?.optionQuantities?.[option.id]?.trim() ?? "";
+        const parsedValue = rawValue === "" ? null : Number(rawValue);
+
+        if (rawValue !== "" && (!Number.isFinite(parsedValue) || parsedValue < 0)) {
+          throw new Error(`Quantity for "${templateRow.description}" option "${option.label}" must be a valid number.`);
+        }
+
+        return {
+          ...option,
+          quantity: parsedValue,
+        };
+      }) ?? [];
 
     if (quantityText !== "" && (parsedQuantity === null || !Number.isFinite(parsedQuantity) || parsedQuantity < 0)) {
       throw new Error(`Quantity for "${templateRow.description}" must be a valid number.`);
@@ -62,6 +78,8 @@ export function validateEditableItems(items: EditableLineItem[]) {
       quantity: parsedQuantity,
       notes: normaliseMultiline(current?.notes ?? ""),
       section: templateRow.section,
+      quantityOptions: parsedOptionQuantities,
+      quantityDisplay: buildQuantityDisplay(parsedQuantity, parsedOptionQuantities),
     };
   });
 }
@@ -101,7 +119,9 @@ export function validatePhotoLinks(photoLinks: PhotoLinkInput[], fileCount: numb
 }
 
 export function ensureSubmissionHasContent(items: NormalizedLineItem[], photoCount: number) {
-  const hasLineData = items.some((item) => item.quantity !== null || item.notes.length > 0);
+  const hasLineData = items.some(
+    (item) => item.quantity !== null || item.notes.length > 0 || (item.quantityOptions ?? []).some((option) => option.quantity !== null),
+  );
 
   if (!hasLineData && photoCount === 0) {
     throw new Error("Enter at least one quantity, note, or photo before submitting.");

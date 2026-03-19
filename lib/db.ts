@@ -46,6 +46,7 @@ function initialise(db: Database.Database) {
       additional_description TEXT NOT NULL DEFAULT '',
       notes_guidance TEXT NOT NULL DEFAULT '',
       quantity REAL,
+      quantity_breakdown_json TEXT NOT NULL DEFAULT '[]',
       notes TEXT NOT NULL DEFAULT '',
       FOREIGN KEY(submission_id) REFERENCES submissions(id) ON DELETE CASCADE
     );
@@ -86,6 +87,7 @@ function initialise(db: Database.Database) {
   `);
 
   ensureColumn(db, "submissions", "pdf_status", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(db, "submission_items", "quantity_breakdown_json", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "submission_photos", "linked_template_id", "TEXT");
   ensureColumn(db, "submission_photos", "linked_section_name", "TEXT NOT NULL DEFAULT 'General'");
   ensureColumn(db, "submission_photos", "linked_description", "TEXT NOT NULL DEFAULT 'Site-wide photo'");

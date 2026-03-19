@@ -26,7 +26,7 @@ export function buildSubmissionCsv(input: CsvInput) {
     charge_type: item.chargeType,
     description: item.description,
     additional_description: item.additionalDescription ?? "",
-    quantity: item.quantity ?? "",
+    quantity: item.quantityDisplay,
     notes: item.notes,
     linked_photo_references: input.photos
       .filter((photo) => photo.linkedTemplateId === item.templateId)

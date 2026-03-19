@@ -50,6 +50,7 @@ export type AdminSubmissionItem = {
   charge_type: string;
   description: string;
   quantity: number | null;
+  quantity_breakdown_json: string;
   notes: string;
   additional_description: string;
   notes_guidance: string;
@@ -222,6 +223,7 @@ export function getAdminSubmissionDetail(reference: string) {
           charge_type,
           description,
           quantity,
+          quantity_breakdown_json,
           notes,
           additional_description,
           notes_guidance

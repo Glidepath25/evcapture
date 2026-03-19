@@ -4,8 +4,9 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { todayIsoDate } from "@/lib/format";
+import { buildEmptyOptionQuantities, itemHasAnyQuantity } from "@/lib/quantity";
 import { cn } from "@/lib/utils";
-import type { EditableLineItem, Project, SurveyTemplateRow } from "@/types";
+import type { EditableLineItem, Project, QuantityOption, SurveyTemplateRow } from "@/types";
 
 type SurveyFormProps = {
   projects: Project[];
@@ -36,11 +37,90 @@ function buildDefaultItems(rows: SurveyTemplateRow[]): EditableLineItem[] {
     templateId: row.id,
     quantity: "",
     notes: "",
+    optionQuantities: buildEmptyOptionQuantities(row),
   }));
 }
 
 function buildPhotoKey(file: File, linkedTemplateId: string | null) {
   return `${linkedTemplateId ?? "general"}-${file.name}-${file.size}-${file.lastModified}`;
+}
+
+type QuantityOptionsProps = {
+  options: QuantityOption[];
+  values: Record<string, string>;
+  onChange: (optionId: string, value: string) => void;
+  dense?: boolean;
+};
+
+function QuantityOptionsInputs({ options, values, onChange, dense = false }: QuantityOptionsProps) {
+  return (
+    <div className="space-y-3">
+      {options.map((option) => (
+        <div key={option.id} className={cn("rounded-2xl bg-[var(--brand-surface-alt)]", dense ? "p-2.5" : "p-3")}>
+          <div className={cn("grid gap-3", dense ? "grid-cols-[minmax(0,1fr),96px] items-start" : "md:grid-cols-[minmax(0,1fr),120px] md:items-start")}>
+            <div>
+              <p className={cn("font-semibold text-[var(--brand-navy)]", dense ? "text-[13px]" : "text-sm")}>{option.label}</p>
+              {option.guidance ? <p className={cn("mt-1 leading-5 text-[var(--brand-navy)]", dense ? "text-[12px]" : "text-sm")}>{option.guidance}</p> : null}
+            </div>
+            <div className="field-shell rounded-2xl bg-white">
+              <input
+                className={cn("w-full rounded-2xl bg-transparent outline-none", dense ? "px-3 py-2 text-right text-sm" : "px-4 py-3 text-right text-base")}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={values[option.id] ?? ""}
+                onChange={(event) => onChange(option.id, event.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QuantityOptionGuidanceList({ options }: { options: QuantityOption[] }) {
+  return (
+    <div className="space-y-2">
+      {options.map((option) => (
+        <p key={option.id} className="rounded-xl bg-[var(--brand-surface-alt)] px-3 py-2 text-[12px] leading-5 text-[var(--brand-navy)]">
+          <span className="font-semibold">{option.label}:</span> {option.guidance ?? "Enter quantity"}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function DesktopQuantityOptionInputs({
+  options,
+  values,
+  onChange,
+}: {
+  options: QuantityOption[];
+  values: Record<string, string>;
+  onChange: (optionId: string, value: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {options.map((option) => (
+        <label key={option.id} className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--brand-muted)]">{option.label}</span>
+          <div className="field-shell rounded-2xl">
+            <input
+              className="w-full rounded-2xl bg-transparent px-3 py-3 text-right text-base outline-none"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={values[option.id] ?? ""}
+              onChange={(event) => onChange(option.id, event.target.value)}
+            />
+          </div>
+        </label>
+      ))}
+    </div>
+  );
 }
 
 function LinkedPhotoPanel({ entries, inputId, label, linkedTemplateId, onAddFiles, onRemove }: PhotoPanelProps) {
@@ -144,6 +224,24 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
     );
   }
 
+  function updateItemOptionQuantity(templateId: string, optionId: string, value: string) {
+    setItems((current) =>
+      current.map((item) => {
+        if (item.templateId !== templateId) {
+          return item;
+        }
+
+        return {
+          ...item,
+          optionQuantities: {
+            ...(item.optionQuantities ?? {}),
+            [optionId]: value,
+          },
+        };
+      }),
+    );
+  }
+
   function removePhoto(key: string) {
     setPhotoEntries((current) => {
       const match = current.find((entry) => entry.key === key);
@@ -207,7 +305,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
       nextErrors.surveyDate = "Survey date is required.";
     }
 
-    const hasLineItemData = items.some((item) => item.quantity.trim() || item.notes.trim());
+    const hasLineItemData = items.some((item) => itemHasAnyQuantity(item) || item.notes.trim());
     if (!hasLineItemData && photoEntries.length === 0) {
       nextErrors.form = "Enter at least one quantity, note, or photo before submitting.";
     }
@@ -445,6 +543,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                         <div className="space-y-2 text-sm text-[var(--brand-ink)]">
                           <p className="font-medium">{row.description}</p>
                           {row.additionalDescription ? <p className="text-[13px] leading-5 text-[var(--brand-muted)]">{row.additionalDescription}</p> : null}
+                          {row.quantityOptions?.length ? <QuantityOptionGuidanceList options={row.quantityOptions} /> : null}
                           {row.notesGuidance ? (
                             <p className="rounded-xl bg-[var(--brand-surface-alt)] px-3 py-2 text-[12px] leading-5 text-[var(--brand-navy)]">
                               Notes guidance: {row.notesGuidance}
@@ -452,17 +551,25 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                           ) : null}
                         </div>
                         <div>
-                          <div className="field-shell rounded-2xl">
-                            <input
-                              className="w-full rounded-2xl bg-transparent px-3 py-3 text-right text-base outline-none"
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step="0.01"
-                              value={item?.quantity ?? ""}
-                              onChange={(event) => updateItem(row.id, "quantity", event.target.value)}
+                          {row.quantityOptions?.length ? (
+                            <DesktopQuantityOptionInputs
+                              options={row.quantityOptions}
+                              values={item?.optionQuantities ?? {}}
+                              onChange={(optionId, value) => updateItemOptionQuantity(row.id, optionId, value)}
                             />
-                          </div>
+                          ) : (
+                            <div className="field-shell rounded-2xl">
+                              <input
+                                className="w-full rounded-2xl bg-transparent px-3 py-3 text-right text-base outline-none"
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="0.01"
+                                value={item?.quantity ?? ""}
+                                onChange={(event) => updateItem(row.id, "quantity", event.target.value)}
+                              />
+                            </div>
+                          )}
                         </div>
                         <div>
                           <div className="field-shell rounded-2xl">
@@ -515,6 +622,7 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                       </div>
 
                       {row.additionalDescription ? <p className="mt-3 text-sm leading-6 text-[var(--brand-muted)]">{row.additionalDescription}</p> : null}
+                      {row.quantityOptions?.length ? <div className="mt-3"><QuantityOptionGuidanceList options={row.quantityOptions} /></div> : null}
                       {row.notesGuidance ? (
                         <p className="mt-3 rounded-2xl bg-[var(--brand-surface-alt)] px-3 py-3 text-sm leading-6 text-[var(--brand-navy)]">
                           Notes guidance: {row.notesGuidance}
@@ -522,20 +630,31 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
                       ) : null}
 
                       <div className="mt-4 grid gap-3">
-                        <label className="block">
-                          <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Quantity</span>
-                          <div className="field-shell rounded-2xl">
-                            <input
-                              className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step="0.01"
-                              value={item?.quantity ?? ""}
-                              onChange={(event) => updateItem(row.id, "quantity", event.target.value)}
+                        {row.quantityOptions?.length ? (
+                          <div>
+                            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Quantities</span>
+                            <QuantityOptionsInputs
+                              options={row.quantityOptions}
+                              values={item?.optionQuantities ?? {}}
+                              onChange={(optionId, value) => updateItemOptionQuantity(row.id, optionId, value)}
                             />
                           </div>
-                        </label>
+                        ) : (
+                          <label className="block">
+                            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Quantity</span>
+                            <div className="field-shell rounded-2xl">
+                              <input
+                                className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="0.01"
+                                value={item?.quantity ?? ""}
+                                onChange={(event) => updateItem(row.id, "quantity", event.target.value)}
+                              />
+                            </div>
+                          </label>
+                        )}
                         <label className="block">
                           <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Notes</span>
                           <div className="field-shell rounded-2xl">

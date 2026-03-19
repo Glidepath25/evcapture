@@ -36,15 +36,15 @@ function addTableHeader(doc: PDFKit.PDFDocument, startY: number) {
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(9);
   doc.text("Charge Type", PAGE_MARGIN + 8, startY + 7, { width: 95 });
   doc.text("Description of Product/Service", PAGE_MARGIN + 110, startY + 7, { width: 230 });
-  doc.text("Qty", PAGE_MARGIN + 345, startY + 7, { width: 40, align: "right" });
-  doc.text("Notes", PAGE_MARGIN + 390, startY + 7, { width: 165 });
+  doc.text("Qty", PAGE_MARGIN + 345, startY + 7, { width: 95 });
+  doc.text("Notes", PAGE_MARGIN + 445, startY + 7, { width: 110 });
 }
 
 function rowHeight(doc: PDFKit.PDFDocument, description: string, quantity: string, notes: string) {
   const height = Math.max(
     doc.heightOfString(description, { width: 230 }),
-    doc.heightOfString(quantity, { width: 40, align: "right" }),
-    doc.heightOfString(notes || "-", { width: 165 }),
+    doc.heightOfString(quantity, { width: 95 }),
+    doc.heightOfString(notes || "-", { width: 110 }),
     18,
   );
   return height + 16;
@@ -114,7 +114,7 @@ function renderSubmissionPdf(doc: PDFKit.PDFDocument, input: PdfInput) {
     }
 
     const descriptionText = descriptionParts.join("\n\n");
-    const height = rowHeight(doc, descriptionText, item.quantity?.toString() ?? "-", item.notes || "-");
+    const height = rowHeight(doc, descriptionText, item.quantityDisplay || "-", item.notes || "-");
 
     if (currentY + height > doc.page.height - PAGE_MARGIN) {
       doc.addPage({ margin: PAGE_MARGIN });
@@ -126,8 +126,8 @@ function renderSubmissionPdf(doc: PDFKit.PDFDocument, input: PdfInput) {
     doc.fillColor("#1f2f3d").font("Helvetica").fontSize(9);
     doc.text(item.chargeType, PAGE_MARGIN + 8, currentY + 8, { width: 95 });
     doc.text(descriptionText, PAGE_MARGIN + 110, currentY + 8, { width: 230 });
-    doc.text(item.quantity === null ? "-" : item.quantity.toString(), PAGE_MARGIN + 345, currentY + 8, { width: 40, align: "right" });
-    doc.text(item.notes || "-", PAGE_MARGIN + 390, currentY + 8, { width: 165 });
+    doc.text(item.quantityDisplay || "-", PAGE_MARGIN + 345, currentY + 8, { width: 95 });
+    doc.text(item.notes || "-", PAGE_MARGIN + 445, currentY + 8, { width: 110 });
     currentY += height;
   }
 
