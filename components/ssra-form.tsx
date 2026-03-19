@@ -17,7 +17,7 @@ import {
 } from "@/data/ssra-config";
 import { SignaturePad } from "@/components/signature-pad";
 import { cn } from "@/lib/utils";
-import type { SsraAttachmentInput, SsraEnvironmentalPage, SsraFormData, SsraPiaPage, SsraPpePage, SsraStreetworksPage } from "@/types";
+import type { Project, SsraAttachmentInput, SsraEnvironmentalPage, SsraFormData, SsraPiaPage, SsraPpePage, SsraStreetworksPage } from "@/types";
 
 type AttachmentEntry = {
   key: string;
@@ -28,7 +28,12 @@ type AttachmentEntry = {
   existingAttachmentId?: number;
 };
 
+type SsraFormProps = {
+  projects: Project[];
+};
+
 const PAGE_TITLES = ["Summary Information", "Hazards and Controls", "PPE and RPE", "Environmental", "Streetworks & Traffic Management", "Openreach PIA Network", "Signature / Final"];
+const MAX_PROJECT_RESULTS = 10;
 
 const PPE_FIELD_ROWS: Array<{
   label: string;
@@ -86,6 +91,12 @@ const PIA_INTERACTION_ROWS: Array<{
 
 function makeAttachmentKey(sectionKey: string, questionKey: string, name: string) {
   return `${sectionKey}:${questionKey}:${name}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function currentDateTimeLocal() {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function FieldShell({ children }: { children: React.ReactNode }) {
@@ -159,12 +170,20 @@ function AttachmentPicker({
   );
 }
 
-export function SsraForm() {
+export function SsraForm({ projects }: SsraFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [page, setPage] = useState(0);
   const [reference, setReference] = useState("");
-  const [formData, setFormData] = useState<SsraFormData>(() => createEmptySsraFormData());
+  const [formData, setFormData] = useState<SsraFormData>(() => ({
+    ...createEmptySsraFormData(),
+    summary: {
+      ...createEmptySsraFormData().summary,
+      eventDateTime: currentDateTimeLocal(),
+    },
+  }));
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -180,6 +199,7 @@ export function SsraForm() {
         if (!response.ok || cancelled) return;
         setReference(payload.reference);
         setFormData(payload.formData);
+        setProjectQuery(payload.formData.summary.project);
         setAttachments(payload.attachments.map((item) => ({ key: makeAttachmentKey(item.sectionKey, item.questionKey, item.originalName), sectionKey: item.sectionKey, questionKey: item.questionKey, name: item.originalName, existingAttachmentId: item.id })));
         setNotice(`Loaded SSRA draft ${payload.reference}.`);
       })
@@ -204,6 +224,39 @@ export function SsraForm() {
   const filesFor = (sectionKey: string, questionKey: string) => attachmentMap.get(`${sectionKey}:${questionKey}`) ?? [];
   const addFiles = (sectionKey: string, questionKey: string, files: File[]) => setAttachments((current) => [...current, ...files.map((file) => ({ key: makeAttachmentKey(sectionKey, questionKey, file.name), sectionKey, questionKey, name: file.name, file }))]);
   const removeFile = (key: string) => setAttachments((current) => current.filter((entry) => entry.key !== key));
+  const normalisedProjectQuery = projectQuery.trim().toLowerCase();
+  const filteredProjects = projects
+    .filter((projectOption) => projectOption.name.toLowerCase().includes(normalisedProjectQuery))
+    .slice(0, MAX_PROJECT_RESULTS);
+
+  function selectProject(projectName: string) {
+    setProjectQuery(projectName);
+    setProjectMenuOpen(false);
+    setFormData((current) => ({
+      ...current,
+      summary: {
+        ...current.summary,
+        project: projectName,
+      },
+    }));
+  }
+
+  function syncProjectFromQuery() {
+    const exactMatch = projects.find((projectOption) => projectOption.name.toLowerCase() === projectQuery.trim().toLowerCase());
+
+    if (exactMatch) {
+      selectProject(exactMatch.name);
+      return;
+    }
+
+    setFormData((current) => ({
+      ...current,
+      summary: {
+        ...current.summary,
+        project: projectQuery.trim(),
+      },
+    }));
+  }
 
   async function persist(mode: "draft" | "submit") {
     setIsSaving(true);
@@ -268,7 +321,57 @@ export function SsraForm() {
           {page === 0 ? (
             <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
-                {summaryField("Project", formData.summary.project, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, project: value } })))}
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Project</span>
+                  <div className="relative">
+                    <FieldShell>
+                      <input
+                        className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                        type="text"
+                        value={projectQuery}
+                        placeholder="Start typing a project"
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setProjectQuery(nextValue);
+                          setProjectMenuOpen(true);
+                          setFormData((current) => ({
+                            ...current,
+                            summary: {
+                              ...current.summary,
+                              project: nextValue,
+                            },
+                          }));
+                        }}
+                        onFocus={() => setProjectMenuOpen(true)}
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            syncProjectFromQuery();
+                            setProjectMenuOpen(false);
+                          }, 120);
+                        }}
+                      />
+                    </FieldShell>
+
+                    {projectMenuOpen && filteredProjects.length > 0 ? (
+                      <div className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-[20px] border border-[var(--brand-border)] bg-white shadow-[0_24px_60px_rgba(16,49,90,0.16)]">
+                        <ul className="max-h-72 overflow-y-auto py-2">
+                          {filteredProjects.map((projectOption) => (
+                            <li key={projectOption.id}>
+                              <button
+                                type="button"
+                                className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left text-sm text-[var(--brand-ink)] transition hover:bg-[var(--brand-surface-alt)]"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectProject(projectOption.name)}
+                              >
+                                <span>{projectOption.name}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                </label>
                 {summaryField("Date & time", formData.summary.eventDateTime, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, eventDateTime: value } })), "datetime-local")}
                 {summaryField("Work Package", formData.summary.workPackage, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, workPackage: value } })))}
                 {summaryField("Location", formData.summary.location, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, location: value } })))}
