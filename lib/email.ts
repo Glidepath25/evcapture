@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import { getServerConfig } from "@/lib/config";
+import { buildSubmissionArtifactBaseName, buildSubmissionSubject } from "@/lib/submission-artifacts";
 import type { SubmissionMetadata } from "@/types";
 
 type EmailInput = SubmissionMetadata & {
@@ -9,10 +10,6 @@ type EmailInput = SubmissionMetadata & {
   csvBuffer: Buffer;
 };
 
-function buildSubject(project: string, surveyType: string, surveyDate: string) {
-  return `${project} - ${surveyType} - ${surveyDate}`;
-}
-
 export async function sendSubmissionEmail(input: EmailInput) {
   const config = getServerConfig();
 
@@ -20,7 +17,8 @@ export async function sendSubmissionEmail(input: EmailInput) {
     throw new Error("DESTINATION_EMAIL is not configured.");
   }
 
-  const subject = buildSubject(input.project, input.surveyType, input.surveyDate);
+  const subject = buildSubmissionSubject(input.project, input.surveyType, input.surveyDate);
+  const attachmentBaseName = buildSubmissionArtifactBaseName(input.project, input.surveyType, input.surveyDate);
   const textBody = [
     "A new Glidepath site survey submission has been received.",
     "",
@@ -46,11 +44,11 @@ export async function sendSubmissionEmail(input: EmailInput) {
       text: textBody,
       attachments: [
         {
-          filename: `${input.reference}.csv`,
+          filename: `${attachmentBaseName}.csv`,
           content: input.csvBuffer.toString("base64"),
         },
         {
-          filename: `${input.reference}.pdf`,
+          filename: `${attachmentBaseName}.pdf`,
           content: input.pdfBuffer.toString("base64"),
         },
       ],
@@ -81,11 +79,11 @@ export async function sendSubmissionEmail(input: EmailInput) {
     text: textBody,
     attachments: [
       {
-        filename: `${input.reference}.csv`,
+        filename: `${attachmentBaseName}.csv`,
         content: input.csvBuffer,
       },
       {
-        filename: `${input.reference}.pdf`,
+        filename: `${attachmentBaseName}.pdf`,
         content: input.pdfBuffer,
       },
     ],

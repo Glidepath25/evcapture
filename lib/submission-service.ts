@@ -4,6 +4,7 @@ import { getDb, writeLog } from "@/lib/db";
 import { sendSubmissionEmail } from "@/lib/email";
 import { buildSubmissionPdf } from "@/lib/pdf";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { buildSubmissionArtifactBaseName } from "@/lib/submission-artifacts";
 import { saveGeneratedFile, saveUploadedPhotos } from "@/lib/storage";
 import { makeReference } from "@/lib/utils";
 import { ensureSubmissionHasContent, validateEditableItems, validatePhotoLinks, validateSubmissionMetadata, validateUploads } from "@/lib/validation";
@@ -64,6 +65,7 @@ function updateSubmissionStatus(reference: string, updates: { pdfStatus?: string
 async function finalizeSubmissionArtifacts(context: BackgroundArtifactsContext) {
   let csvBuffer: Buffer | null = null;
   let pdfBuffer: Buffer | null = null;
+  const artifactBaseName = buildSubmissionArtifactBaseName(context.metadata.project, context.metadata.surveyType, context.metadata.surveyDate);
 
   try {
     csvBuffer = buildSubmissionCsv({
@@ -74,7 +76,7 @@ async function finalizeSubmissionArtifacts(context: BackgroundArtifactsContext) 
       photos: context.storedPhotos,
     });
 
-    const csvFile = await saveGeneratedFile(context.reference, `${context.reference}.csv`, csvBuffer);
+    const csvFile = await saveGeneratedFile(context.reference, `${artifactBaseName}.csv`, csvBuffer);
     updateSubmissionStatus(context.reference, { csvPath: csvFile.relativePath });
     writeLog("info", "Submission CSV generated.", context.reference);
   } catch (error) {
@@ -95,7 +97,7 @@ async function finalizeSubmissionArtifacts(context: BackgroundArtifactsContext) 
       throw new Error("Generated PDF buffer was empty.");
     }
 
-    const pdfFile = await saveGeneratedFile(context.reference, `${context.reference}.pdf`, pdfBuffer);
+    const pdfFile = await saveGeneratedFile(context.reference, `${artifactBaseName}.pdf`, pdfBuffer);
     updateSubmissionStatus(context.reference, {
       pdfStatus: "complete",
       pdfPath: pdfFile.relativePath,
