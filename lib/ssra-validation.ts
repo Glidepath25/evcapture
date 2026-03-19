@@ -192,7 +192,6 @@ export function validateSsraForSubmit(data: SsraFormData) {
 
   if (!data.summary.project) errors.push("Project is required.");
   if (!data.summary.eventDateTime) errors.push("Date and time is required.");
-  if (!data.summary.workPackage) errors.push("Work Package is required.");
   if (!data.summary.location) errors.push("Location is required.");
   if (!data.summary.descriptionOfWorks) errors.push("Description of works is required.");
   if (!data.summary.author) errors.push("Author is required.");

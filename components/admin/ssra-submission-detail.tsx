@@ -118,7 +118,6 @@ export function SsraSubmissionDetailView({ detail }: { detail: AdminSsraSubmissi
                 items={[
                   { label: "Project", value: submission.project || "-" },
                   { label: "Date & time", value: submission.event_datetime ? formatDate(submission.event_datetime) : "-" },
-                  { label: "Work package", value: submission.work_package || "-" },
                   { label: "Location", value: submission.location || "-" },
                   { label: "Author", value: submission.author || "-" },
                   { label: "Description of works", value: submission.description_of_works || "-" },

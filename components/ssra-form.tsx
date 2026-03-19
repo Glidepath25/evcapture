@@ -186,6 +186,8 @@ export function SsraForm({ projects }: SsraFormProps) {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -258,6 +260,41 @@ export function SsraForm({ projects }: SsraFormProps) {
     }));
   }
 
+  function fillGpsLocation() {
+    if (!("geolocation" in navigator)) {
+      setLocationError("GPS location is not available on this device.");
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationError("");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const gpsValue = `Lat ${latitude.toFixed(6)}, Lng ${longitude.toFixed(6)}`;
+
+        setFormData((current) => ({
+          ...current,
+          summary: {
+            ...current.summary,
+            location: gpsValue,
+          },
+        }));
+        setIsLocating(false);
+      },
+      (geoError) => {
+        setLocationError(geoError.message || "Unable to get GPS location.");
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 60000,
+      },
+    );
+  }
+
   async function persist(mode: "draft" | "submit") {
     setIsSaving(true);
     setError("");
@@ -286,9 +323,9 @@ export function SsraForm({ projects }: SsraFormProps) {
     }
   }
 
-  const summaryField = (label: string, value: string, update: (value: string) => void, type = "text") => (
+  const summaryField = (label: string, value: string, update: (value: string) => void, type = "text", required = false) => (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">{label}</span>
+      <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">{label}{required ? " *" : ""}</span>
       <FieldShell>
         <input className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none" type={type} value={value} onChange={(event) => update(event.target.value)} />
       </FieldShell>
@@ -322,7 +359,7 @@ export function SsraForm({ projects }: SsraFormProps) {
             <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Project</span>
+                  <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Project *</span>
                   <div className="relative">
                     <FieldShell>
                       <input
@@ -372,17 +409,43 @@ export function SsraForm({ projects }: SsraFormProps) {
                     ) : null}
                   </div>
                 </label>
-                {summaryField("Date & time", formData.summary.eventDateTime, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, eventDateTime: value } })), "datetime-local")}
-                {summaryField("Work Package", formData.summary.workPackage, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, workPackage: value } })))}
-                {summaryField("Location", formData.summary.location, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, location: value } })))}
-                {summaryField("Author", formData.summary.author, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, author: value } })))}
+                {summaryField("Date & time", formData.summary.eventDateTime, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, eventDateTime: value } })), "datetime-local", true)}
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Location *</span>
+                  <div className="space-y-2">
+                    <FieldShell>
+                      <input
+                        className="w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none"
+                        type="text"
+                        value={formData.summary.location}
+                        onChange={(event) => {
+                          setLocationError("");
+                          setFormData((current) => ({ ...current, summary: { ...current.summary, location: event.target.value } }));
+                        }}
+                      />
+                    </FieldShell>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={fillGpsLocation}
+                        disabled={isLocating}
+                        className="rounded-2xl border border-[var(--brand-border)] px-4 py-2 text-sm font-semibold text-[var(--brand-navy)] disabled:opacity-60"
+                      >
+                        {isLocating ? "Getting GPS location..." : "Use current GPS location"}
+                      </button>
+                      <p className="text-xs text-[var(--brand-muted)]">Uses the device location and fills latitude / longitude.</p>
+                    </div>
+                    {locationError ? <p className="text-sm text-red-700">{locationError}</p> : null}
+                  </div>
+                </label>
+                {summaryField("Author", formData.summary.author, (value) => setFormData((current) => ({ ...current, summary: { ...current.summary, author: value } })), "text", true)}
               </div>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Description of works</span>
+                <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">Description of works *</span>
                 <FieldShell><textarea className="min-h-32 w-full rounded-2xl bg-transparent px-4 py-3 text-base outline-none" value={formData.summary.descriptionOfWorks} onChange={(event) => setFormData((current) => ({ ...current, summary: { ...current.summary, descriptionOfWorks: event.target.value } }))} /></FieldShell>
               </label>
               <div className="space-y-4">
-                <div><h3 className="text-lg font-semibold text-[var(--brand-navy)]">Personnel on site</h3><p className="mt-1 text-sm text-[var(--brand-muted)]">Three rows are shown by default and can be extended later.</p></div>
+                <div><h3 className="text-lg font-semibold text-[var(--brand-navy)]">Personnel on site *</h3><p className="mt-1 text-sm text-[var(--brand-muted)]">Three rows are shown by default and can be extended later. Enter at least one person before final submit.</p></div>
                 {formData.summary.personnel.map((person, index) => (
                   <div key={index} className="grid gap-4 rounded-[24px] border border-[var(--brand-border)] bg-[var(--brand-surface-alt)] p-4 md:grid-cols-3">
                     {["name", "company", "department"].map((field) => (
@@ -594,7 +657,7 @@ export function SsraForm({ projects }: SsraFormProps) {
           {page === 6 ? (
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-[var(--brand-navy)]">Signature</h3>
+                <h3 className="text-lg font-semibold text-[var(--brand-navy)]">Signature *</h3>
                 <p className="mt-1 text-sm text-[var(--brand-muted)]">Sign below before the final submit.</p>
                 <div className="mt-4">
                   <SignaturePad value={formData.signature.signatureDataUrl} onChange={(value) => setFormData((current) => ({ ...current, signature: { signatureDataUrl: value, signatureSignedAt: value ? new Date().toISOString() : "" } }))} />

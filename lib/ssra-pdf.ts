@@ -103,7 +103,6 @@ export async function buildSsraPdf(input: SsraPdfInput) {
   addSectionHeading(doc, "Summary Information");
   addField(doc, "Project", formData.summary.project);
   addField(doc, "Date & time", formData.summary.eventDateTime);
-  addField(doc, "Work Package", formData.summary.workPackage);
   addField(doc, "Location", formData.summary.location);
   addField(doc, "Description of works", formData.summary.descriptionOfWorks);
   addField(doc, "Author", formData.summary.author);
