@@ -42,7 +42,7 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
             </a>
             <Link
               className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-[var(--brand-border)] px-6 py-3 text-base font-semibold text-[var(--brand-navy)] transition hover:bg-[var(--brand-surface-alt)]"
-              href="/"
+              href="/forms/weev-site-survey"
             >
               Submit another survey
             </Link>

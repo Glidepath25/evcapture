@@ -17,10 +17,10 @@ export default async function AdminProtectedLayout({ children }: Readonly<{ chil
 
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                href="/"
+                href="/forms/weev-site-survey"
                 className="rounded-full border border-[var(--brand-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--brand-navy)] transition hover:border-[var(--brand-navy)]"
               >
-                Open public form
+                Open WEEV form
               </Link>
 
               <form action="/admin/logout" method="post">
