@@ -361,12 +361,18 @@ export function SurveyForm({ projects, templateRows, maxUploadCount, maxUploadMb
       body: formData,
     });
 
+    const responseText = await response.text();
     let payload: { error?: string; reference?: string; emailDelivered?: boolean } = {};
     try {
-      payload = (await response.json()) as { error?: string; reference?: string; emailDelivered?: boolean };
+      payload = responseText ? (JSON.parse(responseText) as { error?: string; reference?: string; emailDelivered?: boolean }) : {};
     } catch {
       payload = {
-        error: "The server returned an invalid response. Check the server logs.",
+        error:
+          response.status === 413
+            ? "The upload was rejected before it reached the app. Increase client_max_body_size on the HTTPS Nginx server block."
+            : response.status >= 500
+              ? "The server returned a non-JSON error while processing the upload. Check PM2 and Nginx logs."
+              : "The server returned an invalid response. Check the server logs.",
       };
     }
 
