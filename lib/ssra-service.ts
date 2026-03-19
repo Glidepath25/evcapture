@@ -189,9 +189,11 @@ export async function saveSsra(context: SsraSaveContext) {
     throw new Error("Submission could not be accepted.");
   }
 
-  const rateLimit = checkRateLimit(context.ipAddress);
-  if (!rateLimit.allowed) {
-    throw new Error("Too many submissions from this device. Try again shortly.");
+  if (context.mode === "submit") {
+    const rateLimit = checkRateLimit(context.ipAddress);
+    if (!rateLimit.allowed) {
+      throw new Error("Too many submissions from this device. Try again shortly.");
+    }
   }
 
   const formData = normalizeSsraFormData(context.formData);
