@@ -16,13 +16,15 @@ Mobile-first site survey capture app for Glidepath Solutions. Surveyors open a p
 ## Features
 
 - Public form with no login
+- Public launcher page with separate WEEV and SSRA form entry points
 - Mobile-first layout with card rows on phones and table layout on larger screens
 - Editable project dropdown backed by [`data/projects.json`](./data/projects.json)
 - Fixed survey template backed by [`data/survey-template.ts`](./data/survey-template.ts)
+- Multi-page SSRA form with draft-save, attachments, signature capture, PDF generation, and admin visibility
 - Multiple photo upload with mobile camera support and desktop drag/drop
 - Hidden honeypot, upload constraints, sanitised filenames, and IP-based rate limiting
 - Submission reference number and PDF download link on success
-- Submission, line-item, photo, log, and rate-limit tables stored in SQLite
+- Submission, line-item, photo, SSRA, log, and rate-limit tables stored in SQLite
 - Read-only password-protected admin area at `/admin`
 
 ## Local Run
@@ -42,6 +44,13 @@ npm run dev
 ```
 
 5. Open `http://localhost:3000`.
+
+## Form Routes
+
+- Launcher: `/`
+- WEEV site survey: `/forms/weev-site-survey`
+- SSRA: `/forms/ssra`
+- SSRA success page: `/forms/ssra/success`
 
 ## Environment Variables
 
@@ -79,6 +88,22 @@ Edit [`data/projects.json`](./data/projects.json). Each entry needs:
 ```
 
 No admin UI is required in v1; the app reads the JSON file directly.
+
+## SSRA
+
+The Site Specific Risk Assessment flow is implemented as a second standalone form inside the same app.
+
+- Route: `/forms/ssra`
+- Storage: `ssra_submissions` stores the top-level record and `form_json`; `ssra_attachments` stores uploaded attachment metadata
+- Draft save: users can save and reopen an SSRA by reference using the same route with `?reference=...`
+- PDF generation: final submit queues background PDF generation and email delivery using the same non-blocking pattern as the WEEV survey flow
+- Admin: SSRA records appear in the main `/admin` list and have a dedicated detail view with grouped attachments and protected PDF access
+
+Assumptions made from the workbook:
+
+- Glidepath auto-generated fields were treated as normal manual inputs
+- The workbook dropdown source sheet was effectively empty for departments, so department remains a free-text field for now
+- Plant/equipment, traffic-management, and accreditation options were extracted into [`data/ssra-config.ts`](./data/ssra-config.ts) for easy extension if the scope changes
 
 ## Admin Area
 

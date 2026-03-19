@@ -12,15 +12,15 @@ export default async function AdminProtectedLayout({ children }: Readonly<{ chil
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.26em] text-[var(--brand-navy)]">Glidepath Solutions</p>
               <h1 className="mt-2 text-3xl font-semibold text-[var(--brand-navy)]">EVcapture admin</h1>
-              <p className="mt-2 text-sm text-[var(--brand-muted)]">Read-only access to survey submissions, files, and photo records.</p>
+              <p className="mt-2 text-sm text-[var(--brand-muted)]">Read-only access to EV surveys, SSRAs, files, photos, and attachments.</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                href="/forms/weev-site-survey"
+                href="/"
                 className="rounded-full border border-[var(--brand-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--brand-navy)] transition hover:border-[var(--brand-navy)]"
               >
-                Open WEEV form
+                Open form launcher
               </Link>
 
               <form action="/admin/logout" method="post">

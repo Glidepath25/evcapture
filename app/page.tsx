@@ -7,6 +7,12 @@ const FORM_OPTIONS = [
     description: "Mobile-first site survey capture with quantities, notes, linked photos, PDF and CSV outputs.",
     status: "Live now",
   },
+  {
+    name: "SSRA",
+    href: "/forms/ssra",
+    description: "Site Specific Risk Assessment with draft save, multi-page capture, attachments, PDF output, and admin visibility.",
+    status: "Live now",
+  },
 ];
 
 export default function HomePage() {
@@ -53,7 +59,7 @@ export default function HomePage() {
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--brand-navy)]">What this enables</p>
               <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--brand-muted)]">
                 <p>Keep one public EVcapture URL while adding more customer-specific or workflow-specific forms later.</p>
-                <p>Start with WEEV today, then add alternative survey templates or operational forms without changing the entry point.</p>
+                <p>Start with WEEV and SSRA today, then add alternative survey templates or operational forms without changing the entry point.</p>
               </div>
             </aside>
           </div>

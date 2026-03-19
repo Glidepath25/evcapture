@@ -22,10 +22,14 @@ export function sanitizeFilename(filename: string) {
 }
 
 export function makeReference() {
+  return makeTypedReference("GPS");
+}
+
+export function makeTypedReference(prefix: string) {
   const now = new Date();
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
   const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `GPS-${datePart}-${randomPart}`;
+  return `${prefix}-${datePart}-${randomPart}`;
 }
 
 export function bytesToMegabytes(bytes: number) {

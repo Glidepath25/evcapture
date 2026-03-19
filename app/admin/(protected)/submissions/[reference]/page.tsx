@@ -2,6 +2,7 @@ import path from "node:path";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SsraSubmissionDetailView } from "@/components/admin/ssra-submission-detail";
 import { CopyReferenceButton } from "@/components/admin/copy-reference-button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { getAdminSubmissionDetail } from "@/lib/admin-data";
@@ -15,10 +16,19 @@ type SubmissionDetailPageProps = {
 };
 
 function formatDate(value: string) {
+  if (!value) {
+    return "Not provided";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not provided";
+  }
+
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: value.includes("T") ? "short" : undefined,
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function formatFileSize(bytes: number) {
@@ -47,6 +57,10 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
 
   if (!detail) {
     notFound();
+  }
+
+  if (detail.recordType === "ssra") {
+    return <SsraSubmissionDetailView detail={detail} />;
   }
 
   const { submission } = detail;

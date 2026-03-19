@@ -1,6 +1,7 @@
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { readStoredFile } from "@/lib/storage";
+import { getSsraDownload } from "@/lib/ssra-service";
 import { getSubmissionPdf } from "@/lib/submission-service";
 
 export const runtime = "nodejs";
@@ -14,7 +15,7 @@ type RouteProps = {
 
 export async function GET(_: Request, { params }: RouteProps) {
   const { reference } = await params;
-  const submission = getSubmissionPdf(reference);
+  const submission = getSubmissionPdf(reference) ?? getSsraDownload(reference);
 
   if (!submission?.pdf_path) {
     return NextResponse.json({ error: "PDF not found." }, { status: 404 });

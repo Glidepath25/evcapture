@@ -13,10 +13,19 @@ type AdminListPageProps = {
 };
 
 function formatDate(value: string) {
+  if (!value) {
+    return "Not provided";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not provided";
+  }
+
   return new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
     timeStyle: value.includes("T") ? "short" : undefined,
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function buildPageHref(page: number, params: { q?: string; pdf_status?: string; email_status?: string; status?: string }) {
@@ -75,7 +84,7 @@ export default async function AdminListPage({ searchParams }: AdminListPageProps
       <section className="surface-card rounded-[2rem] p-5 sm:p-6">
         <div className="mb-5 flex flex-col gap-2">
           <h2 className="text-2xl font-semibold text-[var(--brand-navy)]">Submissions</h2>
-          <p className="text-sm text-[var(--brand-muted)]">Search by reference, project, surveyor, or site location. Newest entries appear first.</p>
+          <p className="text-sm text-[var(--brand-muted)]">Search by reference, project, surveyor or author, or site location. Newest entries appear first.</p>
         </div>
 
         <form className="grid gap-3 rounded-[1.5rem] bg-[var(--brand-surface-alt)] p-4 lg:grid-cols-[minmax(0,2fr),repeat(3,minmax(0,1fr)),auto]">
@@ -109,6 +118,8 @@ export default async function AdminListPage({ searchParams }: AdminListPageProps
           <label className="field-shell rounded-2xl px-4 py-3 text-sm">
             <select name="status" defaultValue={params.status ?? ""} className="w-full bg-transparent outline-none">
               <option value="">All record statuses</option>
+              <option value="draft">Draft</option>
+              <option value="submitted">Submitted</option>
               <option value="completed">Completed</option>
               <option value="received">Received</option>
               <option value="failed">Failed</option>
@@ -128,10 +139,10 @@ export default async function AdminListPage({ searchParams }: AdminListPageProps
                   <th className="px-4 py-3 text-left font-semibold">Reference</th>
                   <th className="px-4 py-3 text-left font-semibold">Project</th>
                   <th className="px-4 py-3 text-left font-semibold">Type</th>
-                  <th className="px-4 py-3 text-left font-semibold">Surveyor</th>
+                  <th className="px-4 py-3 text-left font-semibold">Surveyor / author</th>
                   <th className="px-4 py-3 text-left font-semibold">Survey date</th>
                   <th className="px-4 py-3 text-left font-semibold">Created</th>
-                  <th className="px-4 py-3 text-left font-semibold">Photos</th>
+                  <th className="px-4 py-3 text-left font-semibold">Photos / files</th>
                   <th className="px-4 py-3 text-left font-semibold">PDF</th>
                   <th className="px-4 py-3 text-left font-semibold">Email</th>
                   <th className="px-4 py-3 text-left font-semibold">Status</th>

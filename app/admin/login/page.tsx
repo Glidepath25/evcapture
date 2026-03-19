@@ -77,8 +77,8 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps) {
 
           <div className="mt-6 text-sm text-[var(--brand-muted)]">
             Need the public form instead?{" "}
-            <Link href="/forms/weev-site-survey" className="font-semibold text-[var(--brand-navy)]">
-              Open WEEV site survey form
+            <Link href="/" className="font-semibold text-[var(--brand-navy)]">
+              Return to EVcapture launcher
             </Link>
           </div>
         </div>

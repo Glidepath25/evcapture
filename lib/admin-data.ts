@@ -1,7 +1,10 @@
 import path from "node:path";
 import { getDb } from "@/lib/db";
+import type { SsraFormData } from "@/types";
 
 const ADMIN_PAGE_SIZE = 50;
+
+export type AdminRecordType = "ev" | "ssra";
 
 export type AdminSubmissionFilters = {
   q?: string;
@@ -23,9 +26,10 @@ export type AdminSubmissionListItem = {
   email_status: string;
   status: string;
   site_location: string;
+  record_type: AdminRecordType;
 };
 
-export type AdminSubmissionSummary = {
+export type AdminEvSubmissionSummary = {
   id: number;
   reference: string;
   project: string;
@@ -44,6 +48,7 @@ export type AdminSubmissionSummary = {
   photo_count: number;
   pdf_path: string | null;
   csv_path: string | null;
+  record_type: "ev";
 };
 
 export type AdminSubmissionItem = {
@@ -70,17 +75,95 @@ export type AdminSubmissionPhoto = {
   linked_description: string;
 };
 
-export type AdminSubmissionDetail = {
-  submission: AdminSubmissionSummary;
+export type AdminEvSubmissionDetail = {
+  recordType: "ev";
+  submission: AdminEvSubmissionSummary;
   items: AdminSubmissionItem[];
   photos: AdminSubmissionPhoto[];
 };
+
+export type AdminSsraSubmissionSummary = {
+  id: number;
+  reference: string;
+  project: string;
+  author: string;
+  work_package: string;
+  location: string;
+  event_datetime: string;
+  description_of_works: string;
+  created_at: string;
+  updated_at: string;
+  submitted_at: string | null;
+  client_ip: string;
+  user_agent: string;
+  pdf_status: string;
+  email_status: string;
+  email_error: string | null;
+  status: string;
+  attachment_count: number;
+  pdf_path: string | null;
+  record_type: "ssra";
+};
+
+export type AdminSsraAttachment = {
+  id: number;
+  section_key: string;
+  question_key: string;
+  original_name: string;
+  stored_name: string;
+  relative_path: string;
+  mime_type: string;
+  size_bytes: number;
+};
+
+export type AdminSsraSubmissionDetail = {
+  recordType: "ssra";
+  submission: AdminSsraSubmissionSummary;
+  formData: SsraFormData;
+  attachments: AdminSsraAttachment[];
+};
+
+export type AdminSubmissionDetail = AdminEvSubmissionDetail | AdminSsraSubmissionDetail;
 
 export type AdminStats = {
   totalSubmissions: number;
   failedEmails: number;
   pendingPdfs: number;
 };
+
+const LIST_UNION_SQL = `
+  SELECT
+    'ev' AS record_type,
+    reference,
+    project,
+    survey_type,
+    surveyor_name,
+    survey_date,
+    created_at,
+    photo_count,
+    pdf_status,
+    email_status,
+    status,
+    site_location
+  FROM submissions
+
+  UNION ALL
+
+  SELECT
+    'ssra' AS record_type,
+    reference,
+    project,
+    'SSRA' AS survey_type,
+    author AS surveyor_name,
+    event_datetime AS survey_date,
+    created_at,
+    attachment_count AS photo_count,
+    pdf_status,
+    email_status,
+    status,
+    location AS site_location
+  FROM ssra_submissions
+`;
 
 function buildWhereClause(filters: AdminSubmissionFilters) {
   const clauses: string[] = [];
@@ -120,6 +203,74 @@ function buildWhereClause(filters: AdminSubmissionFilters) {
   };
 }
 
+function getSsraDetail(reference: string) {
+  const db = getDb();
+  const submission = db
+    .prepare(
+      `
+        SELECT
+          id,
+          reference,
+          project,
+          author,
+          work_package,
+          location,
+          event_datetime,
+          description_of_works,
+          created_at,
+          updated_at,
+          submitted_at,
+          client_ip,
+          user_agent,
+          pdf_status,
+          email_status,
+          email_error,
+          status,
+          attachment_count,
+          pdf_path,
+          form_json
+        FROM ssra_submissions
+        WHERE reference = ?
+      `,
+    )
+    .get(reference) as (Omit<AdminSsraSubmissionSummary, "record_type"> & { form_json: string }) | undefined;
+
+  if (!submission) {
+    return null;
+  }
+
+  const attachments = db
+    .prepare(
+      `
+        SELECT
+          id,
+          section_key,
+          question_key,
+          original_name,
+          stored_name,
+          relative_path,
+          mime_type,
+          size_bytes
+        FROM ssra_attachments
+        WHERE ssra_submission_id = ?
+        ORDER BY id ASC
+      `,
+    )
+    .all(submission.id) as AdminSsraAttachment[];
+
+  const { form_json, ...submissionSummary } = submission;
+
+  return {
+    recordType: "ssra",
+    submission: {
+      ...submissionSummary,
+      record_type: "ssra",
+    },
+    formData: JSON.parse(form_json) as SsraFormData,
+    attachments,
+  } satisfies AdminSsraSubmissionDetail;
+}
+
 export function getAdminSubmissionsList(filters: AdminSubmissionFilters) {
   const db = getDb();
   const page = Math.max(1, filters.page ?? 1);
@@ -140,10 +291,11 @@ export function getAdminSubmissionsList(filters: AdminSubmissionFilters) {
           pdf_status,
           email_status,
           status,
-          site_location
-        FROM submissions
+          site_location,
+          record_type
+        FROM (${LIST_UNION_SQL}) records
         ${whereSql}
-        ORDER BY datetime(created_at) DESC
+        ORDER BY created_at DESC
         LIMIT @limit OFFSET @offset
       `,
     )
@@ -154,7 +306,7 @@ export function getAdminSubmissionsList(filters: AdminSubmissionFilters) {
     }) as AdminSubmissionListItem[];
 
   const totalRow = db
-    .prepare(`SELECT COUNT(*) as total FROM submissions ${whereSql}`)
+    .prepare(`SELECT COUNT(*) as total FROM (${LIST_UNION_SQL}) records ${whereSql}`)
     .get(params) as { total: number };
 
   return {
@@ -168,19 +320,25 @@ export function getAdminSubmissionsList(filters: AdminSubmissionFilters) {
 
 export function getAdminStats() {
   const db = getDb();
-
-  const total = db.prepare("SELECT COUNT(*) as total FROM submissions").get() as { total: number };
-  const failedEmails = db
-    .prepare("SELECT COUNT(*) as total FROM submissions WHERE email_status = 'failed'")
-    .get() as { total: number };
-  const pendingPdfs = db
-    .prepare("SELECT COUNT(*) as total FROM submissions WHERE pdf_status = 'pending'")
-    .get() as { total: number };
+  const totals = db
+    .prepare(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM submissions) + (SELECT COUNT(*) FROM ssra_submissions) AS total,
+          (SELECT COUNT(*) FROM submissions WHERE email_status = 'failed') + (SELECT COUNT(*) FROM ssra_submissions WHERE email_status = 'failed') AS failed_emails,
+          (SELECT COUNT(*) FROM submissions WHERE pdf_status = 'pending') + (SELECT COUNT(*) FROM ssra_submissions WHERE pdf_status = 'pending') AS pending_pdfs
+      `,
+    )
+    .get() as {
+      total: number;
+      failed_emails: number;
+      pending_pdfs: number;
+    };
 
   return {
-    totalSubmissions: total.total,
-    failedEmails: failedEmails.total,
-    pendingPdfs: pendingPdfs.total,
+    totalSubmissions: totals.total,
+    failedEmails: totals.failed_emails,
+    pendingPdfs: totals.pending_pdfs,
   } satisfies AdminStats;
 }
 
@@ -212,57 +370,61 @@ export function getAdminSubmissionDetail(reference: string) {
         WHERE reference = ?
       `,
     )
-    .get(reference) as AdminSubmissionSummary | undefined;
+    .get(reference) as Omit<AdminEvSubmissionSummary, "record_type"> | undefined;
 
-  if (!submission) {
-    return null;
+  if (submission) {
+    const items = db
+      .prepare(
+        `
+          SELECT
+            id,
+            section_name,
+            charge_type,
+            description,
+            quantity,
+            quantity_breakdown_json,
+            notes,
+            additional_description,
+            notes_guidance
+          FROM submission_items
+          WHERE submission_id = ?
+          ORDER BY id ASC
+        `,
+      )
+      .all(submission.id) as AdminSubmissionItem[];
+
+    const photos = db
+      .prepare(
+        `
+          SELECT
+            id,
+            original_name,
+            stored_name,
+            relative_path,
+            mime_type,
+            size_bytes,
+            linked_template_id,
+            linked_section_name,
+            linked_description
+          FROM submission_photos
+          WHERE submission_id = ?
+          ORDER BY id ASC
+        `,
+      )
+      .all(submission.id) as AdminSubmissionPhoto[];
+
+    return {
+      recordType: "ev",
+      submission: {
+        ...submission,
+        record_type: "ev",
+      },
+      items,
+      photos,
+    } satisfies AdminEvSubmissionDetail;
   }
 
-  const items = db
-    .prepare(
-      `
-        SELECT
-          id,
-          section_name,
-          charge_type,
-          description,
-          quantity,
-          quantity_breakdown_json,
-          notes,
-          additional_description,
-          notes_guidance
-        FROM submission_items
-        WHERE submission_id = ?
-        ORDER BY id ASC
-      `,
-    )
-    .all(submission.id) as AdminSubmissionItem[];
-
-  const photos = db
-    .prepare(
-      `
-        SELECT
-          id,
-          original_name,
-          stored_name,
-          relative_path,
-          mime_type,
-          size_bytes,
-          linked_template_id,
-          linked_section_name,
-          linked_description
-        FROM submission_photos
-        WHERE submission_id = ?
-        ORDER BY id ASC
-      `,
-    )
-    .all(submission.id) as AdminSubmissionPhoto[];
-
-  return {
-    submission,
-    items,
-    photos,
-  } satisfies AdminSubmissionDetail;
+  return getSsraDetail(reference);
 }
 
 export function getAdminPhotoById(photoId: number) {
@@ -291,10 +453,36 @@ export function getAdminPhotoById(photoId: number) {
     | undefined;
 }
 
+export function getAdminSsraAttachmentById(attachmentId: number) {
+  const db = getDb();
+  return db
+    .prepare(
+      `
+        SELECT
+          id,
+          original_name,
+          stored_name,
+          relative_path,
+          mime_type
+        FROM ssra_attachments
+        WHERE id = ?
+      `,
+    )
+    .get(attachmentId) as
+    | {
+        id: number;
+        original_name: string;
+        stored_name: string;
+        relative_path: string;
+        mime_type: string;
+      }
+    | undefined;
+}
+
 export function getAdminStoredFile(kind: "pdf" | "csv", reference: string) {
   const db = getDb();
   const fileColumn = kind === "pdf" ? "pdf_path" : "csv_path";
-  const row = db
+  const evRow = db
     .prepare(
       `
         SELECT
@@ -306,13 +494,37 @@ export function getAdminStoredFile(kind: "pdf" | "csv", reference: string) {
     )
     .get(reference) as { reference: string; file_path: string | null } | undefined;
 
-  if (!row?.file_path) {
+  if (evRow?.file_path) {
+    return {
+      reference: evRow.reference,
+      filePath: evRow.file_path,
+      filename: path.basename(evRow.file_path),
+    };
+  }
+
+  if (kind === "csv") {
+    return null;
+  }
+
+  const ssraRow = db
+    .prepare(
+      `
+        SELECT
+          reference,
+          pdf_path as file_path
+        FROM ssra_submissions
+        WHERE reference = ?
+      `,
+    )
+    .get(reference) as { reference: string; file_path: string | null } | undefined;
+
+  if (!ssraRow?.file_path) {
     return null;
   }
 
   return {
-    reference: row.reference,
-    filePath: row.file_path,
-    filename: path.basename(row.file_path),
+    reference: ssraRow.reference,
+    filePath: ssraRow.file_path,
+    filename: path.basename(ssraRow.file_path),
   };
 }

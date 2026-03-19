@@ -87,12 +87,66 @@ function initialise(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_submission_logs_reference ON submission_logs(submission_reference);
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ssra_submissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reference TEXT NOT NULL UNIQUE,
+      project TEXT NOT NULL DEFAULT '',
+      author TEXT NOT NULL DEFAULT '',
+      work_package TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      event_datetime TEXT NOT NULL DEFAULT '',
+      description_of_works TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'draft',
+      pdf_status TEXT NOT NULL DEFAULT 'pending',
+      email_status TEXT NOT NULL DEFAULT 'pending',
+      email_error TEXT,
+      pdf_path TEXT,
+      attachment_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      submitted_at TEXT,
+      client_ip TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      form_json TEXT NOT NULL DEFAULT '{}',
+      signature_data_url TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS ssra_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ssra_submission_id INTEGER NOT NULL,
+      section_key TEXT NOT NULL,
+      question_key TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      FOREIGN KEY(ssra_submission_id) REFERENCES ssra_submissions(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ssra_submissions_created_at ON ssra_submissions(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ssra_submissions_updated_at ON ssra_submissions(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ssra_attachments_submission_id ON ssra_attachments(ssra_submission_id);
+  `);
+
   ensureColumn(db, "submissions", "pdf_status", "TEXT NOT NULL DEFAULT 'pending'");
   ensureColumn(db, "submissions", "survey_type", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "submission_items", "quantity_breakdown_json", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "submission_photos", "linked_template_id", "TEXT");
   ensureColumn(db, "submission_photos", "linked_section_name", "TEXT NOT NULL DEFAULT 'General'");
   ensureColumn(db, "submission_photos", "linked_description", "TEXT NOT NULL DEFAULT 'Site-wide photo'");
+  ensureColumn(db, "ssra_submissions", "pdf_status", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(db, "ssra_submissions", "email_status", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(db, "ssra_submissions", "email_error", "TEXT");
+  ensureColumn(db, "ssra_submissions", "pdf_path", "TEXT");
+  ensureColumn(db, "ssra_submissions", "attachment_count", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn(db, "ssra_submissions", "updated_at", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "ssra_submissions", "submitted_at", "TEXT");
+  ensureColumn(db, "ssra_submissions", "client_ip", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "ssra_submissions", "user_agent", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "ssra_submissions", "form_json", "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(db, "ssra_submissions", "signature_data_url", "TEXT NOT NULL DEFAULT ''");
 }
 
 export function getDb() {
